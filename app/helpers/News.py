@@ -1,0 +1,318 @@
+import json
+from app.models.Dashboard import DashboardModel
+from app.models.Industries import IndustriesModel
+from app.models.Topics import TopicsModel
+from app.models.Locations import LocationsModel
+from bson import ObjectId
+from datetime import datetime, timedelta                        
+from openai  import AzureOpenAI
+import os
+from app.models.News import NewsModel
+from app.helpers.AIImageGeneration import NewsImageGenerator
+from langchain_openai import AzureChatOpenAI
+from langchain.schema import HumanMessage, SystemMessage
+from app.schemas.Dashboard import NewsList
+from app.dependencies import get_vector_db, get_serp_helper, get_azure_openai_client, get_langchain_chat_client
+    
+class News:
+    def __init__(self):
+        self.model = DashboardModel()
+        # Use singleton instances instead of creating new ones
+        self.vector_store = get_vector_db("source-hr-knowledge")
+        self.industries_model = IndustriesModel()
+        self.topics_model = TopicsModel()
+        self.locations_model = LocationsModel()      
+        self.news_model = NewsModel()
+        self.news_image_generation = NewsImageGenerator()
+        self.serp_helper = get_serp_helper()
+        self.azure_client = get_azure_openai_client()
+        self.chat = get_langchain_chat_client()
+    
+    
+    # Tool implementations
+    def _tool_search_documents(self, query: str, filters: dict = None, top_k: int = 10):
+        try:
+            filters = filters or {}
+            # Pinecone filter operators where applicable
+            pinecone_filter = {}
+            for key in [
+                "location_slug",
+                "primary_industry_slug",
+                "secondary_industry_slug",
+                "region_slug",
+                "topic_slug",
+                "sourceType"
+            ]:
+                value = filters.get(key)
+                if value:
+                    pinecone_filter[key] = value
+            # time range
+            gt = filters.get("discussedTimestamp_gt")
+            lt = filters.get("discussedTimestamp_lt")
+            if gt or lt:
+                pinecone_filter["discussedTimestamp"] = {}
+                if gt:
+                    pinecone_filter["discussedTimestamp"]["$gt"] = gt
+                if lt:
+                    pinecone_filter["discussedTimestamp"]["$lt"] = lt
+
+            docs = self.vector_store.retrieve_by_metadata(query=query, metadata_filter=pinecone_filter, k=top_k)
+            # Return simplified structure
+            return {
+                "success": True,
+                "matches": [
+                    {
+                        "text": getattr(d, "page_content", ""),
+                        "metadata": getattr(d, "metadata", {})
+                    } for d in docs
+                ]
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _tool_fetch_serp_content(self, query: str, num_results: int = 5):
+        try:
+            results = self.serp_helper.serp_results(query)
+            results = results[: max(num_results, 0)] if isinstance(results, list) else []
+            return {"success": True, "results": results}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _tool_get_webpage_content(self, urls: list = None, url: str = None):
+        try:
+            targets = urls or ([url] if url else [])
+            if not targets:
+                return {"success": True, "pages": []}
+            pages = self.serp_helper.get_webpages_parallel(targets)
+            return {"success": True, "pages": pages}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+        
+    async def get_dashboard_choices(self, dashboard_id: str):
+        dashboard = await self.model.get_dashboard({"_id": ObjectId(dashboard_id)})
+        locations = getattr(dashboard, "locations", [])
+        industries = getattr(dashboard, "industries", [])
+        topics = getattr(dashboard, "topics", [])
+        location_slugs = []
+        for region in locations:
+            for loc in getattr(region, "locations", []):
+                slug = getattr(loc, "slug", None)
+                if slug:
+                    location_slugs.append(slug)
+        industry_slugs = []
+        for industry in industries:
+            primary_slug = getattr(industry, "primary_industry_slug", None)
+            if primary_slug:
+                industry_slugs.append(primary_slug)
+            for secondary in getattr(industry, "secondary_industry", []):
+                secondary_slug = getattr(secondary, "slug", None)
+                if secondary_slug:
+                    industry_slugs.append(secondary_slug)
+        topic_slugs = []
+        for category in topics:
+            for topic in getattr(category, "topics", []):
+                slug = getattr(topic, "slug", None)
+                if slug:
+                    topic_slugs.append(slug)
+
+        location_names = [slug.replace('-', ' ').title() for slug in location_slugs] if location_slugs else []
+        industry_names = [slug.replace('-', ' ').title() for slug in industry_slugs] if industry_slugs else []
+        topic_names = [slug.replace('-', ' ').title() for slug in topic_slugs] if topic_slugs else []
+        dashboard_choices = {
+            "location_names": location_names,
+            "industry_names": industry_names,
+            "topic_names": topic_names
+        }
+        return dashboard_choices
+        
+    async def retrieve_news(self, dashboard_id: str):
+        """Main method to extract news items related to dashboard filters."""
+        try:
+            dashboard_choices = await self.get_dashboard_choices(dashboard_id)
+            location_str = ", ".join(dashboard_choices.get("location_names", [])) or "all locations"
+            industry_str = ", ".join(dashboard_choices.get("industry_names", [])) or "all industries"
+            topic_str = ", ".join(dashboard_choices.get("topic_names", [])) or "all topics"
+
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "search_documents",
+                        "description": "Search HR news documents with semantic query and metadata filters.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"},
+                                "filters": {"type": "object"},
+                                "top_k": {"type": "integer", "default": 10}
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "fetch_serp_content",
+                        "description": "Fetch latest HR/legal news from SERP API.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string"},
+                                "num_results": {"type": "integer", "default": 5}
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_webpage_content",
+                        "description": "Scrape webpage content from URLs in parallel.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "urls": {"type": "array", "items": {"type": "string"}},
+                                "url": {"type": "string"}
+                            }
+                        }
+                    }
+                }
+            ]
+
+            messages = [
+                {
+                    "role": "system",
+                    "content": f"""You are a legal news analyst. Extract at least 4 unique structured news items about
+                        changes in employment law or HR regulations.
+                        Focus on the following dashboard context:
+                        - Locations: {location_str}
+                        - Industries: {industry_str}
+                        - Topics: {topic_str}
+                        Use the available tools if needed. Output must be a JSON object only."""
+                },
+                {
+                    "role": "user",
+                    "content": f"Provide 4 unique structured news items based on the above context. current date: {datetime.utcnow()}"
+                }
+            ]
+
+            response = self.azure_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools,
+            )
+            response_message = response.choices[0].message
+            message_content = response_message.content
+            while not message_content and response_message.tool_calls:
+                for tool_call in response_message.tool_calls:
+                    function_name = tool_call.function.name
+                    args = json.loads(tool_call.function.arguments)
+                    if function_name == "search_documents":
+                        result = self._tool_search_documents(**args)
+                    elif function_name == "fetch_serp_content":
+                        result = self._tool_fetch_serp_content(**args)
+                    elif function_name == "get_webpage_content":
+                        result = self._tool_get_webpage_content(**args)
+                        
+                    messages.append({
+                        "role": "assistant",
+                        "tool_calls": [tool_call.model_dump()]
+                    })
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": function_name,
+                        "content": json.dumps(result)
+                    })
+
+                # Get new response after processing tool calls
+                response = self.azure_client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=messages,
+                    tools=tools                )
+                response_message = response.choices[0].message
+                message_content = response_message.content
+                
+            raw_data = message_content
+            news = self.format_news(raw_data)
+
+            # 2. Check if news already exists for this dashboard
+            existing_news_docs = self.news_model.get_news(dashboard_id)
+            if existing_news_docs:
+                news_doc = existing_news_docs[0]
+                existing_news_list = news_doc.news if hasattr(news_doc, 'news') else []
+
+                # 2a. Deduplicate using (title, sourceUrl)
+                existing_keys = {(getattr(n, 'title', None), getattr(n, 'sourceUrl', None)) for n in existing_news_list}
+                new_news_items = []
+                for item in news.news:
+                    if not hasattr(item, 'id') or getattr(item, 'id', None) is None:
+                        try:
+                            item.id = str(ObjectId())
+                        except Exception:
+                            pass
+                    key = (getattr(item, 'title', None), getattr(item, 'sourceUrl', None))
+                    if key not in existing_keys:
+                        new_news_items.append(item)
+
+                # 2b. Add new items to existing doc
+                news_doc.news.extend(new_news_items)
+                news_doc.updatedAt = datetime.utcnow()
+
+                # 2c. Generate images for new items
+                for news_item in new_news_items:
+                    image_id = getattr(news_item, 'id', None) or f"{getattr(news_item, 'title', '')}_{getattr(news_item, 'sourceUrl', '')}"
+                    image_url = self.news_image_generation.process_article(news_item.description, image_id)
+                    news_item.imageUrl = image_url
+
+                self.news_model.update_news(dashboard_id, news_doc.model_dump(by_alias=True))
+                news = self.news_model.get_news(dashboard_id)
+
+            else:
+                # 3. No news exists, create new document
+                for item in news.news:
+                    if not hasattr(item, 'id') or getattr(item, 'id', None) is None:
+                        try:
+                            item.id = str(ObjectId())
+                        except Exception:
+                            pass
+
+                news_payload = {
+                    "dashboardId": dashboard_id,
+                    "news": [item.model_dump(by_alias=True) for item in news.news],
+                    "createdAt": datetime.utcnow(),
+                    "updatedAt": datetime.utcnow()
+                }
+                self.news_model.create(news_payload)
+
+                news_generated = self.news_model.get_news(dashboard_id)
+                for news_doc in news_generated:
+                    for news_item in news_doc.news:
+                        image_id = getattr(news_item, 'id', None) or f"{getattr(news_item, 'title', '')}_{getattr(news_item, 'sourceUrl', '')}"
+                        image_url = self.news_image_generation.process_article(news_item.description, image_id)
+                        news_item.imageUrl = image_url
+                    self.news_model.update_news(dashboard_id, news_doc.model_dump(by_alias=True))
+                news = self.news_model.get_news(dashboard_id)
+
+            return {"success": True, "data": news}
+
+        except Exception as e:
+            print(f"Error in generating news: {e}")
+            return {"success": False, "data": None, "error": str(e)}
+        
+    def format_news(self, raw_data: str):
+        
+        system_message = SystemMessage(
+        content=f"""You are a legal news analyst. Analyze the provided documents and return the most relevant news items.
+        """
+        )
+        messages = [
+            system_message,
+            HumanMessage(content=f"text: {raw_data}")
+        ]
+        structured_llm = self.chat.with_structured_output(NewsList)
+        response = structured_llm.invoke(messages)
+        return response
