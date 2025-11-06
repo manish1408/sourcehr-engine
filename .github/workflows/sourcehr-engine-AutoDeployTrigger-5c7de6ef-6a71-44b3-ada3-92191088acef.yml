@@ -1,0 +1,45 @@
+name: Trigger auto deployment for sourcehr-engine
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: 
+      [ main ]
+    paths:
+    - '**'
+    - '.github/workflows/sourcehr-engine-AutoDeployTrigger-5c7de6ef-6a71-44b3-ada3-92191088acef.yml'
+
+  # Allow manual trigger 
+  workflow_dispatch:
+      
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.SOURCEHRENGINE_AZURE_CREDENTIALS }}
+
+      - name: Build and push container image to registry
+        uses: azure/container-apps-deploy-action@v2
+        with:
+          appSourcePath: ${{ github.workspace }}
+          _dockerfilePathKey_: _dockerfilePath_
+          _targetLabelKey_: _targetLabel_
+          registryUrl: dclchatbot.azurecr.io
+          registryUsername: ${{ secrets.SOURCEHRENGINE_REGISTRY_USERNAME }}
+          registryPassword: ${{ secrets.SOURCEHRENGINE_REGISTRY_PASSWORD }}
+          containerAppName: sourcehr-engine
+          resourceGroup: source-hr
+          imageToBuild: dclchatbot.azurecr.io/sourcehr-engine:${{ github.sha }}
+          
+            
+
+     
+
