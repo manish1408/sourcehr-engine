@@ -1,5 +1,6 @@
 import json
 from app.models.Dashboard import DashboardModel
+from app.helpers.VectorDB import VectorDB
 from app.models.Industries import IndustriesModel
 from app.models.Topics import TopicsModel
 from app.models.Locations import LocationsModel
@@ -9,24 +10,34 @@ from openai  import AzureOpenAI
 import os
 from app.models.News import NewsModel
 from app.helpers.AIImageGeneration import NewsImageGenerator
+from app.helpers.SERP import SERPHelper
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 from app.schemas.Dashboard import NewsList
-from app.dependencies import get_vector_db, get_serp_helper, get_azure_openai_client, get_langchain_chat_client
     
-class News:
+class  News:
     def __init__(self):
         self.model = DashboardModel()
-        # Use singleton instances instead of creating new ones
-        self.vector_store = get_vector_db("source-hr-knowledge")
+        self.vector_store = VectorDB("source-hr-knowledge")
         self.industries_model = IndustriesModel()
         self.topics_model = TopicsModel()
-        self.locations_model = LocationsModel()      
+        self.locations_model=LocationsModel()      
         self.news_model = NewsModel()
         self.news_image_generation = NewsImageGenerator()
-        self.serp_helper = get_serp_helper()
-        self.azure_client = get_azure_openai_client()
-        self.chat = get_langchain_chat_client()
+        self.serp_helper = SERPHelper()
+        self.azure_client = AzureOpenAI(
+            api_key=os.getenv("AZURE_OPENAI_KEY"),
+            api_version="2024-12-01-preview",
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT")
+        )
+        self.chat = AzureChatOpenAI(
+            azure_endpoint=os.getenv('AZURE_OPENAI_ENDPOINT'),
+            azure_deployment=os.getenv('gpt-4o-mini'),
+            api_key=os.getenv('AZURE_OPENAI_KEY'),
+            api_version="2024-12-01-preview",
+            model_name="gpt-4o-mini",
+            openai_api_type="azure",
+        )
     
     
     # Tool implementations
@@ -88,8 +99,8 @@ class News:
         except Exception as e:
             return {"success": False, "error": str(e)}
         
-    async def get_dashboard_choices(self, dashboard_id: str):
-        dashboard = await self.model.get_dashboard({"_id": ObjectId(dashboard_id)})
+    def get_dashboard_choices(self, dashboard_id: str):
+        dashboard = self.model.get_dashboard({"_id": ObjectId(dashboard_id)})
         locations = getattr(dashboard, "locations", [])
         industries = getattr(dashboard, "industries", [])
         topics = getattr(dashboard, "topics", [])
@@ -125,10 +136,10 @@ class News:
         }
         return dashboard_choices
         
-    async def retrieve_news(self, dashboard_id: str):
+    def retrieve_news(self, dashboard_id: str):
         """Main method to extract news items related to dashboard filters."""
         try:
-            dashboard_choices = await self.get_dashboard_choices(dashboard_id)
+            dashboard_choices = self.get_dashboard_choices(dashboard_id)
             location_str = ", ".join(dashboard_choices.get("location_names", [])) or "all locations"
             industry_str = ", ".join(dashboard_choices.get("industry_names", [])) or "all industries"
             topic_str = ", ".join(dashboard_choices.get("topic_names", [])) or "all topics"

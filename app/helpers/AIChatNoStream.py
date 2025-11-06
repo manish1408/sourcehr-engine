@@ -177,7 +177,7 @@ class AIChatNoStream:
                             "type": "function",
                             "function": {
                                 "name": "search_documents",
-                                "description": "Search HR law documents in Pinecone with semantic query and metadata filters. Use higher top_k values (15-20) for comprehensive research.",
+                                "description": "Search HR law documents in Pinecone with semantic query and metadata filters.",
                                 "parameters": {
                                     "type": "object",
                                     "properties": {
@@ -195,7 +195,7 @@ class AIChatNoStream:
                                                 "discussedTimestamp_lt": {"type": "number"}
                                             }
                                         },
-                                        "top_k": {"type": "integer", "default": 15, "description": "Number of results to retrieve. Use 15-20 for comprehensive research."}
+                                        "top_k": {"type": "integer", "default": 10}
                                     },
                                     "required": ["query"]
                                 }
@@ -205,12 +205,12 @@ class AIChatNoStream:
                             "type": "function",
                             "function": {
                                 "name": "fetch_serp_content",
-                                "description": "Fetch latest HR/legal resources from the web via SERP API. Use higher num_results (8-10) for comprehensive research.",
+                                "description": "Fetch latest HR/legal resources from the web via SERP API.",
                                 "parameters": {
                                     "type": "object",
                                     "properties": {
                                         "query": {"type": "string"},
-                                        "num_results": {"type": "integer", "default": 8, "description": "Number of search results to fetch. Use 8-10 for thorough research."}
+                                        "num_results": {"type": "integer", "default": 5}
                                     },
                                     "required": ["query"]
                                 }
@@ -566,10 +566,10 @@ class AIChatNoStream:
         try:
             query = args.get("query")
             filters = self._format_filters_for_pinecone(args.get("filters"))
-            top_k = args.get("top_k", 15)
+            top_k = args.get("top_k", 10)
             
-            # Retrieve top 10 docs without any filters for broader context
-            docs_without_filter = self.vector_database.retrieve_by_metadata(query, {}, 10)
+            # Retrieve top 5 docs without any filters
+            docs_without_filter = self.vector_database.retrieve_by_metadata(query, {}, 5)
 
             # Retrieve top_k docs with filters
             docs = self.vector_database.retrieve_by_metadata(query, filters, top_k)
@@ -592,12 +592,12 @@ class AIChatNoStream:
         
     def _tool_fetch_serp_content(self, args: dict) -> dict:
         """
-        INPUT: {"query": "...", "num_results": 8}
+        INPUT: {"query": "...", "num_results": 5}
         OUTPUT (example): {"results": [{"title":"...","url":"..."}, ...]}
         """
         try:
             search_query = args.get("query", "")
-            num_results = int(args.get("num_results", 8))
+            num_results = int(args.get("num_results", 5))
 
             serp_data = self.serp_helper.serp_results(search_query)
 
@@ -701,49 +701,39 @@ class AIChatNoStream:
                 "role": "system",
                 "content": f"""{system_message}
 
-You are an expert AI assistant specialized in HR laws, compliance, and court decisions. Your goal is to provide comprehensive, well-researched, and authoritative responses.
+You are an AI assistant specialized in HR laws, compliance, and court decisions.
 
 # Context
 - Current Unix timestamp: {current_ts}
 - Interpret all relative dates (e.g., "today", "this year", "after July 2024") against this timestamp.
 
 # Knowledge & Tools
-You have access to:
+You have:
 - Curated HR/legal knowledge in a vector DB (Pinecone) with metadata fields:
   location_slug, primary_industry_slug, secondary_industry_slug, region_slug, topic_slug, discussedTimestamp
 - Slug vector stores for resolving fuzzy user text into canonical slugs
-- A SERP tool for fresh, real-time web results
-- A web content fetcher to extract clean text from URLs (can process multiple URLs in parallel)
-- A PDF Generator: generate_pdf to create downloadable PDF documents
+- A SERP tool for fresh results when curated data is insufficient
+- A web content fetcher to extract clean text from URLs
+- A PDF Generator**: generate_pdf to create downloadable PDF documents
 
-# Research Methodology - BE THOROUGH
-1) **Resolve Filters First**: If query contains location/topic/industry/region → call resolve_filter_slug with ALL required queries at once.
+# Decision Flow
+1) If the query contains fuzzy location/topic/industry/region → call resolve_filter_slug with all required queries at once.
+2) Query curated store → search_documents (prioritize this).
+   - MANDATORY: Before using any filters in search_documents, you MUST first get the correct filter values from resolve_filter_slug.
+   - Only use filters if you have valid slugs from resolve_filter_slug - never invent or guess filter values.
+   - When user implies time: use discussedTimestamp_gt/lt only.
+3) If results are missing/stale or user asks for "latest" → fetch_serp_content, then get_webpage_content for relevant URLs (can process multiple URLs in parallel).
+4)When the user requests a PDF:
+   - IMMEDIATELY call the generate_pdf tool
+   - Include all relevant content that was just discussed in the history.
+   - Use an appropriate title based on the user query.
+   - Common trigger phrases: "create a PDF", "generate PDF", "download", "export as PDF", "save as document"
+5) Summarize clearly, cite sources (pageUrl/file_url/file_name/source), cluster by topic/date.
 
-2) **Multi-Source Research**: 
-   - ALWAYS query curated store → search_documents (use top_k=15-20 for comprehensive results)
-   - MANDATORY: Before using filters, get correct values from resolve_filter_slug - never guess filter values
-   - When user implies time: use discussedTimestamp_gt/lt filters
-   - For current/latest information: ALSO use fetch_serp_content to get real-time web results
-   - Extract content from relevant URLs using get_webpage_content (process multiple URLs in parallel)
 
-3) **Cross-Reference Sources**: 
-   - Combine information from vector DB, web search, and scraped content
-   - Look for patterns, contradictions, and consensus across sources
-   - Verify dates and recency of information
 
-4) **PDF Generation**: When user requests a PDF:
-   - IMMEDIATELY call generate_pdf tool
-   - Include all relevant researched content
-   - Use descriptive title based on the query
-   - Trigger phrases: "create a PDF", "generate PDF", "download", "export as PDF", "save as document"
 
-# Response Format - ALWAYS STRUCTURE YOUR RESPONSE THIS WAY:
-
-## SUMMARY
-Provide a concise 2-4 sentence overview that directly answers the user's question. Include key takeaways and main findings.
-
-## DETAILS
-REMEMBER: Users want in-depth, research-backed answers, not superficial summaries. Be thorough, authoritative, and comprehensive.
+- Never invent slugs; always normalize via resolve_filter_slug.
                 """
             }
         ]

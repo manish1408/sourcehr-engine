@@ -2,7 +2,6 @@ import json
 from fastapi import APIRouter, HTTPException, Depends, File, UploadFile, Form
 from app.middleware.JWTVerification import jwt_validator
 from app.services.Documents import DocumentService
-from app.dependencies import get_document_service
 from app.schemas.ServerResponse import ServerResponse
 from app.helpers.Utilities import Utils
 import shutil
@@ -16,12 +15,14 @@ load_dotenv()
 
 router = APIRouter(prefix="/api/v1/documents", tags=["Documents"], dependencies=[Depends(jwt_validator)])
 
+def get_service():
+    return DocumentService() 
 
 @router.post("/upload-to-knowledge", response_model=ServerResponse)
-async def upload_to_knowledge(
+def upload_to_knowledge(
     files: list[UploadFile] = File(...),
     sourceType: str = Form(...),
-    service: DocumentService = Depends(get_document_service),
+    service: DocumentService = Depends(get_service),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     results = []
@@ -33,7 +34,7 @@ async def upload_to_knowledge(
             pdf_path = pdf_path.replace(" ", "_")
             with open(pdf_path, "wb") as buffer:
                 shutil.copyfileobj(file.file, buffer)
-            data = await service.upload_and_add_document(pdf_path, file.filename, sourceType)
+            data = service.upload_and_add_document(pdf_path, file.filename, sourceType)
             results.append({
                 "filename": file.filename,
                 "data": data["data"],
@@ -58,9 +59,9 @@ async def upload_to_knowledge(
     
     
 @router.get("/get-document{document_id}", response_model=ServerResponse)
-async def get_document(document_id:str, service: DocumentService = Depends(get_document_service),jwt_payload: dict = Depends(jwt_validator)):
+def get_document(document_id:str, service: DocumentService = Depends(get_service),jwt_payload: dict = Depends(jwt_validator)):
     try:
-        data = await service.get_document_by_id(document_id)
+        data = service.get_document_by_id(document_id)
         return Utils.create_response(data["data"],data["success"],data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})
@@ -68,17 +69,17 @@ async def get_document(document_id:str, service: DocumentService = Depends(get_d
 
     
 @router.get("/get-all-documents", response_model=ServerResponse)
-async def get_all_document_from_knowledge(page:int = 1, limit:int = 100, service:DocumentService = Depends(get_document_service),jwt_payload: dict = Depends(jwt_validator)):
+def get_all_document_from_knowledge(page:int = 1, limit:int = 100, service:DocumentService = Depends(get_service),jwt_payload: dict = Depends(jwt_validator)):
     try:
-        data = await service.get_all_documents(page,limit)
+        data = service.get_all_documents(page,limit)
         return Utils.create_response(data["data"],data["success"],data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})
     
 @router.delete("/delete-document/{document_id}", response_model=ServerResponse)
-async def delete_document_from_knowledge(document_id:str, service: DocumentService = Depends(get_document_service),jwt_payload: dict = Depends(jwt_validator)):
+def delete_document_from_knowledge(document_id:str, service: DocumentService = Depends(get_service),jwt_payload: dict = Depends(jwt_validator)):
     try:
-        data = await service.delete_document(document_id)
+        data = service.delete_document(document_id)
         return Utils.create_response(data["data"],data["success"],data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})

@@ -28,8 +28,8 @@ class ChatService:
 
             
             
-    async def add_text_to_knowledge(self, knowledge_id, text):
-            knowledge_base = await self.knowledge_model.get_knowledge({'_id':ObjectId(knowledge_id)})
+    def add_text_to_knowledge(self,knowledge_id,text):
+            knowledge_base = self.knowledge_model.get_knowledge({'_id':ObjectId(knowledge_id)})
             
             random_hex = Utils.generate_hex_string(6)
             file_name = f"{text[:15].replace(' ','-')}-{random_hex}"
@@ -43,7 +43,7 @@ class ChatService:
                     "error":'Unable to add document to vector db'
                 }
             
-            data = await self.document_model.create_document({
+            data = self.document_model.create_document({
                 "knowledgeId": str(knowledge_id),
                 "vectorDatabase": {
                     "index": os.getenv("PINECONE_INDEX"),
@@ -70,22 +70,22 @@ class ChatService:
           
 
 
-    async def generate_session_title(self, session_id, question, response):
+    def generate_session_title(self, session_id, question, response):
         
         try:
-            session = await self.model.get_session({"_id": ObjectId(session_id)})
+            session = self.model.get_session({"_id": ObjectId(session_id)})
             if session.get("sessionTitle") == "New Chat":
-                # knowledge_base = await self.knowledge_model.get_knowledge({'_id': ObjectId(knowledge_id)})
+                # knowledge_base = self.knowledge_model.get_knowledge({'_id': ObjectId(knowledge_id)})
                 ai_chat = AIChat(namespace="source-hr-knowledge")
                 resp = ai_chat.get_chat_session_title(question, response)
-                session = await self.model.update_session(session_id, {"sessionTitle":resp.title})
+                session = self.model.update_session(session_id, {"sessionTitle":resp.title})
                 return session
             return
         except Exception as e:
             return None
         
     async def chat_stream(self, question, session_id):
-        sessions = await self.model.get_session_with_projection(
+        sessions = self.model.get_session_with_projection(
             filters={"_id": ObjectId(session_id)},
             fields=["messages"]
         )
@@ -134,8 +134,8 @@ class ChatService:
                 "createdAt": datetime.utcnow()
             }
 
-            success_user = await self.model.add_message(session_id, user_message)
-            success_assistant = await self.model.add_message(session_id, assistant_message)
+            success_user = self.model.add_message(session_id, user_message)
+            success_assistant = self.model.add_message(session_id, assistant_message)
 
             if not success_user or not success_assistant:
                 yield {"error": "Failed to save messages"}
@@ -151,9 +151,9 @@ class ChatService:
             yield {"error": str(e)}
 
         
-    async def chat_no_stream(self, question, session_id):
+    def chat_no_stream(self, question, session_id):
 
-        sessions = await self.model.get_session_with_projection(
+        sessions = self.model.get_session_with_projection(
             filters={"_id": ObjectId(session_id)},
             fields=["messages","LLMHistory"]
         )
@@ -196,7 +196,7 @@ class ChatService:
             yield {"delta": chunk}  # 🔥 streaming to frontend
 
         # after streaming is done, save to DB
-        updated_doc = await self.model.collection.find_one_and_update(
+        updated_doc = self.model.collection.find_one_and_update(
             {"_id": ObjectId(session_id)},
             {"$set": {"LLMHistory": input_messages.get("messages", [])}},
             return_document=ReturnDocument.AFTER,
@@ -225,8 +225,8 @@ class ChatService:
             "createdAt": datetime.utcnow()
         }
 
-        success_user_message = await self.model.add_message(session_id, user_message)
-        success_assistant_message = await self.model.add_message(session_id, assistant_message)
+        success_user_message = self.model.add_message(session_id, user_message)
+        success_assistant_message = self.model.add_message(session_id, assistant_message)
 
         if not success_user_message or not success_assistant_message:
             yield {
@@ -245,10 +245,73 @@ class ChatService:
             }
         }
 
+    # def chat(self, knowledge_id, question, session_id):
+    #     knowledge_base = self.knowledge_model.get_knowledge({'_id': ObjectId(knowledge_id)})
+    #     knowledge_base_dict = knowledge_base.dict()
+
+
+    #     sessions = self.model.get_session_with_projection(
+    #         filters={"_id": ObjectId(session_id)},
+    #         fields=["messages"]
+    #     )
+
+    #     if not sessions:
+    #         return {
+    #             "success": False,
+    #             "data": None,
+    #             "error": "Session not found"
+    #         }
+
+    #     session = sessions[0]
+
+    #     session["messages"] = session.get("messages", [])[-5:]
+
+    #     ai_chat = AIChat(knowledge_base.vectorDatabase.namespace)
+    #     citations = []
+    #     resp,citations = ai_chat.chat_with_knowledge(question, session)
+
+    #     if not resp:
+    #         return {
+    #             "success": False,
+    #             "data": None,
+    #             "error": "Unable to generate response"
+    #         }
+
+    #     user_message = {
+    #         "message": question,
+    #         "messageType": "user",
+    #         "citations": [],
+    #         "createdAt": datetime.utcnow()
+    #     }
+
+    #     assistant_message = {
+    #         "message": resp,
+    #         "messageType": "assistant",
+    #         "citations": citations,
+    #         "createdAt": datetime.utcnow()
+    #     }
+
+    #     success_user_message = self.model.add_message(session_id, user_message)
+    #     success_assistant_message = self.model.add_message(session_id, assistant_message)
+
+    #     if not success_user_message or not success_assistant_message:
+    #         return {
+    #             "success": False,
+    #             "data": None,
+    #             "error": "Failed to save chat messages"
+    #         }
+
+    #     return {
+    #         "success": True,
+    #         "data": {
+    #             "response": resp,
+    #             "citations": citations
+    #         }
+    #     }
         
-    async def create_session(self, user_id: str, dashboard_id: str) -> dict:
+    def create_session(self, user_id: str, dashboard_id: str) -> dict:
         try:
-            user = await self.user_model.get_user({"_id": ObjectId(user_id)})
+            user = self.user_model.get_user({"_id": ObjectId(user_id)})
 
             session_data = {
                 "userId": user_id,
@@ -258,11 +321,11 @@ class ChatService:
             }
 
             # This returns the ObjectId
-            inserted_id = await self.model.create_session(session_data)
+            inserted_id = self.model.create_session(session_data)
             session_id = str(inserted_id)
 
             # Update last_session_id in the dashboard
-            await self.dashboard_model.update_dashboard(dashboard_id,{"lastSessionId":session_id})
+            self.dashboard_model.update_dashboard(dashboard_id,{"lastSessionId":session_id})
 
             return {"data": {"_id": session_id}, "success": True}  # 👈 wrap in a dict for consistency
 
@@ -271,20 +334,20 @@ class ChatService:
 
 
             
-    async def get_all_sessions(self, dashboard_id, page, limit=10):
+    def get_all_sessions(self,dashboard_id,page,limit=10):
         
         # if role == 'admin':
         #     filter = {"knowledgeId": knowledge_id}
         # else:
         filter = {"dashboardId": dashboard_id}
-        total_docs = await self.model.get_sessions_count(filter)
+        total_docs = self.model.get_sessions_count(filter)
         limit = limit
         total_pages = (total_docs + limit - 1) // limit
         number_to_skip = (page - 1) * limit
-        # docs = await self.model.get_sessions(filter, number_to_skip, limit)
+        # docs = self.model.get_sessions(filter, number_to_skip, limit)
         
-        cursor = self.model.collection.find(filter,{"sessionTitle": 1, "userId":1, "name":1, "dashboardId":1, "createdOn": 1}).skip(number_to_skip).limit(limit).sort("createdOn",-1)
-        docs = await cursor.to_list(length=limit)
+        docs = self.model.collection.find(filter,{"sessionTitle": 1, "userId":1, "name":1, "dashboardId":1, "createdOn": 1}).skip(number_to_skip).limit(limit).sort("createdOn",-1)
+        docs = list(docs)
          
         return {
                 "success": True,
@@ -298,26 +361,26 @@ class ChatService:
                 }
             }
 
-    async def get_session(self, dashboard_id: str, session_id: str):
+    def get_session(self, dashboard_id: str, session_id: str):
         try:
-            document = await self.model.get_session({"_id": ObjectId(session_id)})
+            document = self.model.get_session({"_id": ObjectId(session_id)})
             return {"data": document, "success": True}
         except Exception as e:
             return {"data": None, "success": False, "error": str(e)}
 
 
-    async def delete_session(self, session_id: str) -> dict:
-        success = await self.model.delete_session(session_id)
+    def delete_session(self, session_id: str) -> dict:
+        success = self.model.delete_session(session_id)
         if not success:
             return {"data": None, "success": False, "error": "Failed to delete session"}
         return {"data": "Session deleted", "success": True}
 
             
         
-    async def get_file_by_file_name(self, knowledge_id, file_name):
+    def get_file_by_file_name(self,knowledge_id,file_name):
         try:
 
-            resp = await self.document_model.get_document({"knowledgeId":knowledge_id, "name":file_name })
+            resp = self.document_model.get_document({"knowledgeId":knowledge_id, "name":file_name })
                 
             if(resp):
                 return {
@@ -340,7 +403,7 @@ class ChatService:
             }   
             
     async def regenerate_response_stream(self, session_id: str, ai_message_id: str):
-        session = await self.model.get_session({"_id": ObjectId(session_id)})
+        session = self.model.get_session({"_id": ObjectId(session_id)})
         if not session:
             yield {"error": "Session not found"}
             return
@@ -382,7 +445,7 @@ class ChatService:
                     "message": content,
                     "citations": []
                 }
-            await self.model.update_message_with_message_id(session_id, ai_message_id, full_response, citations)
+            self.model.update_message_with_message_id(session_id, ai_message_id, full_response, citations)
 
             # Yield the messageId at the end
             yield {

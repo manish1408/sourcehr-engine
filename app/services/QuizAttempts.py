@@ -10,12 +10,12 @@ class QuizAttemptService:
         self.quiz_attempt_model = QuizAttemptModel()
         self.quiz_model=QuizModel()
 
-    async def create_attempt(self, quiz_id: str, user_id) -> dict:
+    def create_attempt(self, quiz_id: str,user_id) -> dict:
         try:
             data={}
             data["quizId"]=quiz_id
             data["userId"]=user_id
-            inserted_id = await self.quiz_attempt_model.create_attempt(data)
+            inserted_id = self.quiz_attempt_model.create_attempt(data)
             return {
                 "success": True,
                 "data": inserted_id
@@ -27,13 +27,13 @@ class QuizAttemptService:
                 "error": f"Unable to create quiz attempt: {str(e)}"
             }
 
-    async def get_attempts(self, filters: dict = {}, page: int = 1, limit: int = 100) -> dict:
+    def get_attempts(self, filters: dict = {}, page: int = 1, limit: int = 100) -> dict:
         try:
             limit=limit
-            total = await self.quiz_model.collection.count_documents()
+            total = self.quiz_model.collection.count_documents()
             total_pages = (total + limit - 1) // limit
             number_to_skip = (page - 1) * limit
-            attempts = await self.quiz_attempt_model.get_attempts(filters, number_to_skip, limit)
+            attempts = self.quiz_attempt_model.get_attempts(filters, number_to_skip, limit)
             return {
                 "success": True,
                 "data": {
@@ -51,10 +51,9 @@ class QuizAttemptService:
                 "data": None,
                 "error": f"Unable to fetch attempts: {str(e)}"
             }
-            
-    async def push_answer(self, attempt_id: str, answer: AnswerSubmission) -> dict:
+    def push_answer(self, attempt_id: str, answer: AnswerSubmission) -> dict:
         try:
-            result = await self.quiz_attempt_model.push_answer(attempt_id, answer)
+            result = self.quiz_attempt_model.push_answer(attempt_id, answer)
             if not result:
                 return {
                     "success": False,
@@ -73,9 +72,9 @@ class QuizAttemptService:
             }
 
 
-    async def update_selected_answers(self, attempt_id: str, updates: AnswerSubmission) -> dict:
+    def update_selected_answers(self, attempt_id: str, updates: AnswerSubmission) -> dict:
         try:
-            success = await self.quiz_attempt_model.update_selected_answers(attempt_id, updates)
+            success = self.quiz_attempt_model.update_selected_answers(attempt_id, updates)
             if not success:
                 return {
                     "success": False,
@@ -94,9 +93,9 @@ class QuizAttemptService:
             }
 
 
-    async def delete_attempt(self, attempt_id: str) -> dict:
+    def delete_attempt(self, attempt_id: str) -> dict:
         try:
-            success = await self.quiz_attempt_model.delete_attempt(attempt_id)
+            success = self.quiz_attempt_model.delete_attempt(attempt_id)
             if not success:
                 return {
                     "success": False,
@@ -114,14 +113,14 @@ class QuizAttemptService:
                 "error": f"Unable to delete attempt: {str(e)}"
             }
             
-    async def submit_quiz(self, attempt_id: str, quiz_id: str) -> Dict:
+    def submit_quiz(self, attempt_id: str, quiz_id: str) -> Dict:
         try:
-            attempt = await self.quiz_attempt_model.get_attempt_by_id({"_id":ObjectId(attempt_id)})
+            attempt = self.quiz_attempt_model.get_attempt_by_id({"_id":ObjectId(attempt_id)})
             if not attempt:
                 return {"success": False, "data": None, "error": "Attempt not found"}
 
             attempt = attempt.model_dump()
-            quiz = await self.quiz_model.get_quiz({"_id": ObjectId(quiz_id)})
+            quiz = self.quiz_model.get_quiz({"_id": ObjectId(quiz_id)})
             if not quiz:
                 return {"success": False, "data": None, "error": "Quiz not found"}
 
@@ -150,7 +149,7 @@ class QuizAttemptService:
                 "percentage": round(percentage, 2),
                 "status": "SUBMITTED"
             }
-            updated = await self.quiz_attempt_model.update_attempt(attempt_id, update_data)
+            updated = self.quiz_attempt_model.update_attempt(attempt_id, update_data)
             if not updated:
                 return {
                     "success": False,
@@ -168,9 +167,9 @@ class QuizAttemptService:
                 "error": "Error while submitting quiz"
             }
             
-    async def get_leaderboard(self, skip: int = 0, limit: int = 10) -> dict:
+    def get_leaderboard(self, skip: int = 0, limit: int = 10) -> dict:
         try:
-            leaderboard = await self.quiz_attempt_model.get_leaderboard(skip=skip, limit=limit)
+            leaderboard = self.quiz_attempt_model.get_leaderboard(skip=skip, limit=limit)
             return {
                 "success": True,
                 "data": leaderboard
@@ -182,14 +181,14 @@ class QuizAttemptService:
                 "error": f"Unable to fetch leaderboard: {str(e)}"
             }
             
-    async def get_user_submission(self, user_id, quiz_id):
+    def get_user_submission(self,user_id,quiz_id):
         try:
-            attempt = await self.quiz_attempt_model.get_attempt_by_id({"userId":user_id})
+            attempt = self.quiz_attempt_model.get_attempt_by_id({"userId":user_id})
             if not attempt:
                 return {"success": False, "data": None, "error": "Attempt not found"}
 
             attempt = attempt.model_dump()
-            quiz = await self.quiz_model.get_quiz({"_id": ObjectId(quiz_id)})
+            quiz = self.quiz_model.get_quiz({"_id": ObjectId(quiz_id)})
             if not quiz:
                 return {"success": False, "data": None, "error": "Quiz not found"}
 

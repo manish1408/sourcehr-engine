@@ -28,14 +28,14 @@ class DocumentService:
         self.azure_helper = AzureBlobUploader()
 
             
-    async def delete_document(self, document_id):
+    def delete_document(self,document_id):
         try:
-            document = await self.document_model.get_document({'_id':ObjectId(document_id)})
+            document = self.document_model.get_document({'_id':ObjectId(document_id)})
             vector_db_helper = VectorDB("source-hr-knowledge")
             resp = vector_db_helper.deleteDocument(document.vectorDocId)
             data = False
             if resp:
-                data = await self.document_model.delete_document(document_id)
+                data = self.document_model.delete_document(document_id)
             else:
                 return {
                     "success": False,
@@ -64,7 +64,7 @@ class DocumentService:
                 "error":str(e)
             }
     
-    async def upload_and_add_document(self, file_path, file_name, source_type):
+    def upload_and_add_document(self, file_path, file_name,source_type):
         ext = os.path.splitext(file_name)[1].lower()
         folder_by_ext = {
             '.pdf': ('pdf-knowledge', 'pdf'),
@@ -74,14 +74,14 @@ class DocumentService:
         folder_name, doc_type = folder_by_ext.get(ext, ('other-knowledge', ext.lstrip('.')))        
         file_url = self.azure_helper.upload_file_to_azure_blob(file_path, folder_name, ext)
         # Use correct field name to prevent duplicates
-        existing_doc = await self.document_model.get_document({"name": file_name})
+        existing_doc = self.document_model.get_document({"name": file_name})
         if existing_doc:
             return {
                 "success": False,
                 "data": None,
                 "error": 'A document with this name already exists.'
             }
-        data = await self.document_model.create_document({
+        data = self.document_model.create_document({
             "vectorDatabase": {
                 "index": os.getenv("PINECONE_INDEX"),
                 "namespace": "source-hr-knowledge"
@@ -105,12 +105,12 @@ class DocumentService:
                 "error": 'Unable to add document'
             }
 
-    async def get_all_documents(self, page, limit=10):
-        total_docs = await self.document_model.get_documents_count({})
+    def get_all_documents(self,page,limit=10):
+        total_docs = self.document_model.get_documents_count({})
         limit = limit
         total_pages = (total_docs + limit - 1) // limit
         number_to_skip = (page - 1) * limit
-        docs = await self.document_model.get_documents({}, number_to_skip, limit)
+        docs = self.document_model.get_documents({}, number_to_skip, limit)
         
         if not docs:
                 return {
@@ -135,10 +135,10 @@ class DocumentService:
 
     
         
-    async def get_document_by_id(self, document_id):
+    def get_document_by_id(self,document_id):
         try:
 
-            resp = await self.document_model.get_document({ "_id":ObjectId(document_id) })
+            resp = self.document_model.get_document({ "_id":ObjectId(document_id) })
                 
             if(resp):
                 return {
@@ -160,10 +160,10 @@ class DocumentService:
                 "error":str(e)
             }
             
-    async def process_pending_documents(self):
+    def process_pending_documents(self):
         try:
             # Atomically find and claim a pending document
-            pending_doc = await self.document_model.collection.find_one_and_update(
+            pending_doc = self.document_model.collection.find_one_and_update(
                 {"status": "PENDING"},
                 {"$set": {"status": "IN_PROGRESS"}},
                 projection={"_id": 1, "originalSource": 1, "name": 1, "sourceType": 1}
@@ -178,14 +178,14 @@ class DocumentService:
             try:
                 source_type = pending_doc.get("sourceType", "")
                 vector_docs_results = vector_db_helper.enterDocumentToKnowledge(file_path, file_name, source_type)
-                await self.document_model.update_document(
+                self.document_model.update_document(
                     str(doc_id),
                     {"status": "SUCCESS", "vectorDocId": vector_docs_results}
                 )
                 return {"success": True, "error": None, "data": str(doc_id)}
             except Exception as e:
                 # Align with DocumentStatus enum
-                await self.document_model.update_document(str(doc_id), {"status": "ERROR"})
+                self.document_model.update_document(str(doc_id), {"status": "ERROR"})
                 return {"success": False, "error": str(e), "data": str(doc_id)}
         except Exception as e:
             return {"success": False, "error": str(e), "data": None}

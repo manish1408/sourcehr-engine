@@ -8,144 +8,143 @@ from app.schemas.Dashboard import DashboardCreate, DashboardUpdate
 from app.helpers.Utilities import Utils
 from app.schemas.ServerResponse import ServerResponse
 from app.helpers.AIImageGeneration import NewsImageGenerator
-from app.dependencies import get_dashboard_service
 
 
 
 router = APIRouter(prefix="/api/v1/dashboards", tags=["Dashboards"])
 
 @router.post("/create", response_model=ServerResponse)
-async def create_dashboard(
+def create_dashboard(
     body: DashboardCreate,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
         user_id = jwt_payload["id"]
-        data = await service.create_dashboard(user_id, body)
+        data = service.create_dashboard(user_id, body)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})
 
 @router.get("/list", response_model=ServerResponse)
-async def list_dashboards(
+def list_dashboards(
     page: int = 1,
     limit: int = 10,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
         user_id = jwt_payload["id"]
-        data = await service.list_dashboards(user_id, page, limit)
+        data = service.list_dashboards(user_id, page, limit)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})
 
 @router.get("/get/{dashboard_id}", response_model=ServerResponse)
-async def get_dashboard(
+def get_dashboard(
     dashboard_id: str,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.get_dashboard(dashboard_id)
+        data = service.get_dashboard(dashboard_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})
 
 @router.put("/update/{dashboard_id}", response_model=ServerResponse)
-async def update_dashboard(
+def update_dashboard(
     dashboard_id: str,
     body: DashboardUpdate,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.update_dashboard(dashboard_id, body)
+        data = service.update_dashboard(dashboard_id, body)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})
 
 @router.delete("/delete/{dashboard_id}", response_model=ServerResponse)
-async def delete_dashboard(
+def delete_dashboard(
     dashboard_id: str,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.delete_dashboard(dashboard_id)
+        data = service.delete_dashboard(dashboard_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail=Utils.create_response(None, False, str(e)).dict())
 
 @router.post("/duplicate/{dashboard_id}", response_model=ServerResponse)
-async def duplicate_dashboard(
+def duplicate_dashboard(
     dashboard_id: str,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
         user_id = jwt_payload["id"]
-        data = await service.duplicate_dashboard(dashboard_id, user_id)
+        data = service.duplicate_dashboard(dashboard_id, user_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail=Utils.create_response(None, False, str(e)).dict())
     
 
 @router.get('/get_law_changes/{dashboard_id}', response_model=ServerResponse)
-async def retrieve_law_changes(
+def retrieve_law_changes(
     dashboard_id: str,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.retrieve_law_changes(dashboard_id)
+        data = service.retrieve_law_changes(dashboard_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
     
 @router.get('/fetch-dashboard-compliance/{dashboard_id}', response_model=ServerResponse)
-async def fetch_dashboard_compliance(
+def fetch_dashboard_compliance(
     dashboard_id:str,
-    service: DashboardService = Depends(get_dashboard_service),jwt_payload: dict = Depends(jwt_validator)
+    service: DashboardService = Depends(DashboardService),jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.get_law_changes(dashboard_id)
+        data = service.get_law_changes(dashboard_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
     
 @router.get('/get_locations', response_model=ServerResponse)
-async def get_locations(
-    service: DashboardService = Depends(get_dashboard_service)):
+def get_locations(
+    service: DashboardService = Depends(DashboardService)):
     try:
-        data = await service.get_locations()
+        data = service.get_locations()
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
     
 
 @router.get('/get_industries', response_model=ServerResponse)
-async def get_industries(
-    service: DashboardService = Depends(get_dashboard_service)):
+def get_industries(
+    service: DashboardService = Depends(DashboardService)):
     try:
-        data = await service.get_industries()
+        data = service.get_industries()
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
     
 @router.get('/get_topics', response_model=ServerResponse)
-async def get_topics(
-    service: DashboardService = Depends(get_dashboard_service)):
+def get_topics(
+    service: DashboardService = Depends(DashboardService)):
     try:
-        data = await service.get_topics()
+        data = service.get_topics()
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
 
 @router.get('/generate_news/{dashboard_id}', response_model=ServerResponse)
-async def generate_news(dashboard_id:str,
-    service: DashboardService = Depends(get_dashboard_service),
+def generate_news(dashboard_id:str,
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator),
     background_tasks: BackgroundTasks = BackgroundTasks()
     ):
@@ -156,20 +155,20 @@ async def generate_news(dashboard_id:str,
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
     
 @router.get('/fetch-news/{dashboard_id}', response_model=ServerResponse)
-async def fetch_news(
+def fetch_news(
     dashboard_id:str,
-    service: DashboardService = Depends(get_dashboard_service),jwt_payload: dict = Depends(jwt_validator)
+    service: DashboardService = Depends(DashboardService),jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.fetch_news(dashboard_id)
+        data = service.fetch_news(dashboard_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
     
 @router.get('/generate_court_decisions/{dashboard_id}', response_model=ServerResponse)
-async def generate_court_decisions(
+def generate_court_decisions(
     dashboard_id: str,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator),
     background_tasks: BackgroundTasks = BackgroundTasks()
 ):
@@ -180,20 +179,20 @@ async def generate_court_decisions(
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
 
 @router.get('/fetch-court-decisions/{dashboard_id}', response_model=ServerResponse)
-async def fetch_court_decisions(
+def fetch_court_decisions(
     dashboard_id: str,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.fetch_court_decisions(dashboard_id)
+        data = service.fetch_court_decisions(dashboard_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", ""))
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
 
 @router.get('/generate_legal_calender/{dashboard_id}', response_model=ServerResponse)
-async def generate_legal_calender(   dashboard_id:str,
-    service: DashboardService = Depends(get_dashboard_service),
+def generate_legal_calender(   dashboard_id:str,
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator),
     background_tasks: BackgroundTasks = BackgroundTasks()
     ):
@@ -204,13 +203,13 @@ async def generate_legal_calender(   dashboard_id:str,
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})
     
 @router.get('/get_legal_calender/{dashboard_id}', response_model=ServerResponse)
-async def get_legal_calender(
+def get_legal_calender(
     dashboard_id:str,
-    service: DashboardService = Depends(get_dashboard_service),
+    service: DashboardService = Depends(DashboardService),
     jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.get_legal_calender(dashboard_id)
+        data = service.get_legal_calender(dashboard_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", "") )
     except Exception as e:
         raise HTTPException(status_code=400, detail={"data": None, "error": str(e), "success": False})

@@ -33,7 +33,7 @@ class EvaluationService:
 
         
 
-    async def upload_csv_dataset(
+    def upload_csv_dataset(
         self,
         file: UploadFile,
         name: str,
@@ -60,7 +60,7 @@ class EvaluationService:
             )
 
             os.remove(tmp_path)
-            await self.evaluation_dataset_model.create_evaluation_dataset({
+            self.evaluation_dataset_model.create_evaluation_dataset({
                 "datasetId":dataset.id,
                 "datasetName":name,
                 "description":description
@@ -109,7 +109,7 @@ class EvaluationService:
 
 
             
-    async def evaluate_langsmith_dataset(self, dataset_id: str):
+    async def evaluate_langsmith_dataset(self,dataset_id: str):
         try:
             print("Evaluation started")
             examples = list(self.client.list_examples(dataset_id=dataset_id))
@@ -191,7 +191,7 @@ class EvaluationService:
                     correctness=correctness_result["score"],
                     conciseness=conciseness_result["score"]
                 )
-                await self.evaluation_model.create_evaluation({
+                self.evaluation_model.create_evaluation({
                     "userQuery": user_query,
                     "output":prediction,
                     "scores": scores.model_dump(),
@@ -208,9 +208,9 @@ class EvaluationService:
                 "error": str(e)
             }
             
-    async def delete_evaluation_dataset(self, dataset_id: str) -> dict:
+    def delete_evaluation_dataset(self, dataset_id: str) -> dict:
         try:
-            deleted = await self.evaluation_dataset_model.delete_evaluation_dataset(dataset_id)
+            deleted = self.evaluation_dataset_model.delete_evaluation_dataset(dataset_id)
             return {
                 "success": True,
                 "data": "Dataset  deleted successfully"
@@ -222,9 +222,9 @@ class EvaluationService:
                 "error": f"Unable to delete dataset: {str(e)}"
             }
             
-    async def get_evaluation(self, evaluation_id):
+    def get_evaluation(self,evaluation_id):
         try:
-            data = await self.evaluation_model.get_evaluation_by_id(evaluation_id)
+            data=self.evaluation_model.get_evaluation_by_id(evaluation_id)
             return{
                         "success": True,
                         "data": data
@@ -237,12 +237,12 @@ class EvaluationService:
             }
             
             
-    async def get_all_evaluations(self, page, limit=10):
-        total_docs = await self.evaluation_model.get_documents_count({})
+    def get_all_evaluations(self,page,limit=10):
+        total_docs = self.evaluation_model.get_documents_count({})
         limit = limit
         total_pages = (total_docs + limit - 1) // limit
         number_to_skip = (page - 1) * limit
-        docs = await self.evaluation_model.get_all_evaluations({}, number_to_skip, limit)
+        docs = self.evaluation_model.get_all_evaluations({}, number_to_skip, limit)
         
         if not docs:
                 return {

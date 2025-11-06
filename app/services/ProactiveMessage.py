@@ -15,10 +15,10 @@ class ProactiveMessageService:
         self.dashboard_model=DashboardModel()
         
         
-    async def generateProactiveFollowUpMessage(self, session_id, dashboard_id):
+    def generateProactiveFollowUpMessage(self, session_id, dashboard_id):
         try:
-            conversationHistory = await self.chat_session_model.get_session({'_id': ObjectId(session_id)})
-            dashboard = await self.dashboard_model.get_dashboard({'_id': ObjectId(dashboard_id)})
+            conversationHistory = self.chat_session_model.get_session({'_id': ObjectId(session_id)})
+            dashboard = self.dashboard_model.get_dashboard({'_id': ObjectId(dashboard_id)})
             locations = getattr(dashboard, "locations", [])
             industries = getattr(dashboard, "industries", [])
             topics = getattr(dashboard, "topics", [])

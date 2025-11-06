@@ -9,14 +9,16 @@ from app.services.Common import CommonService
 from app.middleware.JWTVerification import jwt_validator
 from app.helpers.Utilities import Utils
 from app.schemas.Common import DeleteFileSchema
-from app.dependencies import get_common_service
 
 
 
 router = APIRouter(prefix="/api/v1/common", tags=["common"])
+
+def get_common_service():
+    return CommonService()
     
 @router.post("/upload-file/{folder_name}",response_model=ServerResponse)
-async def upload_file(
+def upload_file(
     folder_name:str,
     file: UploadFile=File(None), 
     service: CommonService = Depends(get_common_service),
@@ -35,12 +37,11 @@ async def upload_file(
         os.remove(file_path)
         return Utils.create_response(data["data"],data["success"],data.get("error", "") )
     except Exception as e:
-        if os.path.exists(file_path):
-            os.remove(file_path)
+        os.remove(file_path)
         raise HTTPException(status_code=400, detail={"data": None, "error":str(e),"success": False})
     
 @router.delete("/delete-file/{file_name}", response_model=ServerResponse)
-async def delete_file(
+def delete_file(
     body: DeleteFileSchema,
     service: CommonService = Depends(get_common_service),
     jwt_payload: dict = Depends(jwt_validator)

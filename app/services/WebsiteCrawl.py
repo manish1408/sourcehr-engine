@@ -33,10 +33,10 @@ class WebsiteCrawlService:
         self.scraper=WebsiteScraper()
         self.vector_db=VectorDB("source-hr-knowledge")
 
-    async def create_website_crawl(self, data: WebsiteCrawlCreate) -> dict:
+    def create_website_crawl(self, data: WebsiteCrawlCreate) -> dict:
         try:
             crawl_data = data.model_dump()
-            inserted_id = await self.model.create_website_crawl(crawl_data)
+            inserted_id = self.model.create_website_crawl(crawl_data)
             return {
                 "success": True,
                 "data": inserted_id
@@ -48,17 +48,17 @@ class WebsiteCrawlService:
                 "error": "Unable to create website crawl"
             }
 
-    async def list_website_crawls(self, page: int = 1, limit: int = 10, filters: dict = {}) -> dict:
+    def list_website_crawls(self, page: int = 1, limit: int = 10, filters: dict = {}) -> dict:
         try:
             # Get scheduled jobs and map by job ID for quick lookup
             jobs = scheduler.get_jobs()
             job_map = {job.id: str(job.next_run_time) for job in jobs}
 
             # Fetch paginated crawls from DB
-            total = await self.model.collection.count_documents(filters)
+            total = self.model.collection.count_documents(filters)
             total_pages = (total + limit - 1) // limit
             number_to_skip = (page - 1) * limit
-            crawls = await self.model.get_website_crawls(filters, number_to_skip, limit)
+            crawls = self.model.get_website_crawls(filters, number_to_skip, limit)
 
             # Attach only next_run_time to each crawl
             for crawl in crawls:
@@ -84,19 +84,19 @@ class WebsiteCrawlService:
             }
 
 
-    async def get_website_crawl_by_id(self, crawl_id: str, page: int = 1, limit: int = 10) -> dict:
+    def get_website_crawl_by_id(self, crawl_id: str, page: int = 1, limit: int = 10) -> dict:
         try:
             if not ObjectId.is_valid(crawl_id):
                 raise HTTPException(status_code=400, detail="Invalid Crawl ID")
             # Fetch the full document to count total URLs
-            full_doc = await self.model.collection.find_one({"_id": ObjectId(crawl_id)})
+            full_doc = self.model.collection.find_one({"_id": ObjectId(crawl_id)})
             if not full_doc:
                 raise HTTPException(status_code=404, detail="Website crawl not found")
             total_urls = len(full_doc.get("listOfCrawlableUrls", []))
             total_pages = (total_urls + limit - 1) // limit
             number_to_skip = (page - 1) * limit
             # Fetch the paginated URLs
-            crawl = await self.model.get_website_crawl_with_paginated_urls({"_id": ObjectId(crawl_id)}, number_to_skip, limit)
+            crawl = self.model.get_website_crawl_with_paginated_urls({"_id": ObjectId(crawl_id)}, number_to_skip, limit)
             if not crawl:
                 raise HTTPException(status_code=404, detail="Website crawl not found")
             return {
@@ -117,11 +117,11 @@ class WebsiteCrawlService:
                 "error": f"Unable to get website crawl: {str(e)}"
             }
 
-    async def update_website_crawl(self, crawl_id: str, update_data: dict) -> dict:
+    def update_website_crawl(self, crawl_id: str, update_data: dict) -> dict:
         try:
             if not ObjectId.is_valid(crawl_id):
                 raise HTTPException(status_code=400, detail="Invalid Crawl ID")
-            updated = await self.model.update_website_crawl({"_id": ObjectId(crawl_id)}, update_data)
+            updated = self.model.update_website_crawl({"_id": ObjectId(crawl_id)}, update_data)
             if not updated:
                 raise HTTPException(status_code=404, detail="Website crawl not found or not updated")
             return {
@@ -135,9 +135,9 @@ class WebsiteCrawlService:
                 "error": f"Unable to update website crawl: {str(e)}"
             }
 
-    async def delete_website_crawl(self, crawl_id: str) -> dict:
+    def delete_website_crawl(self, crawl_id: str) -> dict:
         try:
-            deleted = await self.model.delete_website_crawl(crawl_id)
+            deleted = self.model.delete_website_crawl(crawl_id)
             return {
                 "success": True,
                 "data": "Website crawl deleted successfully"
@@ -151,7 +151,7 @@ class WebsiteCrawlService:
 
     # def schedule_crawl(self, crawl_id: str, max_depth: int = 1, max_urls: int = None):
     #     try:
-    #         website = await self.model.collection.find_one({"_id": ObjectId(crawl_id)})
+    #         website = self.model.collection.find_one({"_id": ObjectId(crawl_id)})
     #         duration_str = website.get("crawlDuration", "1H")
     #         hours, minutes = self.parse_duration(duration_str)
     #         scheduler.add_job(
@@ -163,7 +163,7 @@ class WebsiteCrawlService:
     #             kwargs={"website_id": crawl_id, "max_depth": max_depth, "max_urls": max_urls}
     #         )
     #         # Update the crawlStatus to SCHEDULED after scheduling the job
-    #         await self.model.collection.update_one(
+    #         self.model.collection.update_one(
     #             {"_id": ObjectId(crawl_id)},
     #             {"$set": {"crawlStatus": "SCHEDULED"}}
     #         )
@@ -201,7 +201,7 @@ class WebsiteCrawlService:
     #     except Exception as e:
     #         return {"data": None, "success": False, "error": str(e)}
 
-    async def list_jobs(self):
+    def list_jobs(self):
         try:
             print("asjdasjdahsj")
             jobs = scheduler.get_jobs()
@@ -222,13 +222,13 @@ class WebsiteCrawlService:
     async def fetch_crawlable_urls(self, crawl_id: str) -> dict:
 
         try:
-            website = await self.model.collection.find_one({"_id": ObjectId(crawl_id)})
+            website = self.model.collection.find_one({"_id": ObjectId(crawl_id)})
             if not website:
                 return {"success": False, "data": None, "error": "Crawl entry not found"}
             # Check if crawlable URLs already exist
             if website.get("listOfCrawlableUrls") and len(website["listOfCrawlableUrls"]) > 0:
                 return {"success": False, "data": website["listOfCrawlableUrls"], "error": "Already crawlable urls present"}
-            await self.model.collection.update_one(
+            self.model.collection.update_one(
                 {"_id": ObjectId(crawl_id)},
                 {
                     "$set": {
@@ -253,7 +253,7 @@ class WebsiteCrawlService:
                 ).dict() for u in discovered_urls
             ]
 
-            await self.model.update_website_crawl(
+            self.model.update_website_crawl(
                 {"_id": ObjectId(crawl_id)},
                 {
                     "listOfCrawlableUrls": crawlable_urls,
@@ -268,11 +268,11 @@ class WebsiteCrawlService:
             return {"success": False, "data": str(e), "error": "Unable to fetch crawlable URLs"}
         
         
-    async def scrape_website_and_ingest_data(self, url: str, crawl_id):
+    def scrape_website_and_ingest_data(self,url:str,crawl_id):
         try:
             print(f"scrapping url: {url} from crawler {crawl_id}")
             scraped_content = self.scraper.scrape_url(url)
-            website_doc = await self.model.collection.find_one({"_id": ObjectId(crawl_id)}, {"sourceType": 1})
+            website_doc = self.model.collection.find_one({"_id": ObjectId(crawl_id)}, {"sourceType": 1})
             source_type = website_doc.get("sourceType", "") if website_doc else ""
             if scraped_content["success"]:
                 markdown_content = scraped_content["data"]["markdown"]
@@ -282,7 +282,7 @@ class WebsiteCrawlService:
                     source_type=source_type
                 )
                 if results:
-                    await self.model.collection.update_one(
+                    self.model.collection.update_one(
                         {"_id":ObjectId(crawl_id),"listOfCrawlableUrls.url": url},
                         {
                             "$set": {
@@ -295,7 +295,7 @@ class WebsiteCrawlService:
                     )
                     print(f"scrapped {url} from crawler {crawl_id} sucessfully")
                 else:
-                    await self.model.collection.update_one(
+                    self.model.collection.update_one(
                         {"_id":ObjectId(crawl_id),"listOfCrawlableUrls.url": url},
                         {
                             "$set": {
@@ -308,7 +308,7 @@ class WebsiteCrawlService:
                     )
 
             else:
-                    await self.model.collection.update_one(
+                    self.model.collection.update_one(
                         {"_id":ObjectId(crawl_id),"listOfCrawlableUrls.url": url},
                         {
                             "$set": {
@@ -326,10 +326,10 @@ class WebsiteCrawlService:
         
         
         
-    async def fetch_and_scrape_pending_urls(self):
+    def fetch_and_scrape_pending_urls(self):
         try:
             # Atomically find and claim a pending URL
-            pending_url_doc = await self.model.collection.find_one_and_update(
+            pending_url_doc = self.model.collection.find_one_and_update(
                 {"listOfCrawlableUrls.crawlStatus": "PENDING"},
                 {"$set": {"listOfCrawlableUrls.$.crawlStatus": "IN_PROGRESS"}},
                 projection={"urlOfWebsite": 1, "listOfCrawlableUrls.$": 1}
@@ -339,7 +339,7 @@ class WebsiteCrawlService:
                 return  # No pending URLs left
 
             url = pending_url_doc["listOfCrawlableUrls"][0]["url"]
-            await self.scrape_website_and_ingest_data(url,crawl_id)
+            self.scrape_website_and_ingest_data(url,crawl_id)
         except Exception as e:
             return {"success": False, "error": str(e), "data": None}
         
@@ -347,7 +347,7 @@ class WebsiteCrawlService:
         try:
             # Schedule the scraper to run every 5 minutes
             scheduler.add_job(
-                lambda: asyncio.run(self.fetch_and_scrape_pending_urls()),
+                self.fetch_and_scrape_pending_urls,
                 'interval',
                 seconds=10,
                 id='scraper_job',
@@ -361,11 +361,11 @@ class WebsiteCrawlService:
         except Exception as e:
             return {"success": False, "data": None, "error": str(e)}
         
-    async def get_scraper_status(self, crawl_id):
+    def get_scraper_status(self, crawl_id):
         try:
             if not ObjectId.is_valid(crawl_id):
                 return {"success": False, "error": "Invalid Crawl ID", "data": None}
-            doc = await self.model.collection.find_one({"_id": ObjectId(crawl_id)})
+            doc = self.model.collection.find_one({"_id": ObjectId(crawl_id)})
             if not doc:
                 return {"success": False, "error": "Crawl not found", "data": None}
             urls = doc.get("listOfCrawlableUrls", [])
@@ -385,10 +385,10 @@ class WebsiteCrawlService:
         except Exception as e:
             return {"success": False, "error": str(e), "data": None}
         
-    async def clear_crawlable_urls(self, crawl_id: str) -> dict:
+    def clear_crawlable_urls(self, crawl_id: str) -> dict:
             if not ObjectId.is_valid(crawl_id):
                 return {"success": False, "data": None, "error": "Invalid Crawl ID"}
-            updated = await self.model.update_website_crawl({"_id": ObjectId(crawl_id)}, {"listOfCrawlableUrls": []})
+            updated = self.model.update_website_crawl({"_id": ObjectId(crawl_id)}, {"listOfCrawlableUrls": []})
             if not updated:
                 return {"success": False, "data": None, "error": "Website crawl not found or not updated"}
             return {"success": True, "data": "listOfCrawlableUrls cleared successfully"}
@@ -442,7 +442,7 @@ class WebsiteCrawlService:
     async def fetch_pending_crawlable_urls(self):
         try:
             # Fetch documents with crawlStatus = "PENDING"
-            pending_doc = await self.model.collection.find_one({"crawlStatus": "PENDING"}, {"_id": 1})
+            pending_doc = self.model.collection.find_one({"crawlStatus": "PENDING"}, {"_id": 1})
             if pending_doc:
                 crawl_id = str(pending_doc["_id"])
                 await self.fetch_crawlable_urls(crawl_id)

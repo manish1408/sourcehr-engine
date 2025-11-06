@@ -20,9 +20,9 @@ class DDService:
     def __init__(self):
         self.model = DDModel()
 
-    async def get_all_laws(self) -> dict:
+    def get_all_laws(self) -> dict:
         try:
-            raw_data = await self.model.get_all_laws()
+            raw_data = self.model.get_all_laws()
             for item in raw_data:
                 item["_id"] = str(item["_id"])
             parsed_data = [FinalDocSchema(**item) for item in raw_data]

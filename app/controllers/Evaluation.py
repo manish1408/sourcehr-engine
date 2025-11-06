@@ -6,24 +6,25 @@ from app.helpers.Utilities import Utils
 from app.middleware.JWTVerification import jwt_validator
 from app.schemas.ServerResponse import ServerResponse
 from app.services.Evaluation import EvaluationService
-from app.dependencies import get_evaluation_service
 
+def get_service():
+    return EvaluationService()
 
 router = APIRouter(prefix="/api/v1/evaluation", tags=["Evaluation"])
 
 @router.post("/upload-csv-dataset",response_model=ServerResponse)
-async def upload_csv_dataset_api(
+def upload_csv_dataset_api(
     file: UploadFile = File(...),
     name: str = Form(...),
     description: str = Form(...),
     input_keys: List[str] = Form(...),
     output_keys: List[str] = Form(...),
-    service: EvaluationService = Depends(get_evaluation_service),
+    service: EvaluationService = Depends(get_service),
     jwt_payload: dict = Depends(jwt_validator)
 
 ):
     try:
-        data = await service.upload_csv_dataset(
+        data = service.upload_csv_dataset(
             file=file,
             name=name,
             description=description,
@@ -36,12 +37,12 @@ async def upload_csv_dataset_api(
 
 
 @router.delete("/delete-dataset/{dataset_id}", response_model=ServerResponse)
-async def delete_evaluation_dataset(
+def delete_evaluation_dataset(
     dataset_id: str,
-    service: EvaluationService = Depends(get_evaluation_service),jwt_payload: dict = Depends(jwt_validator)
+    service: EvaluationService = Depends(get_service),jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        data = await service.delete_evaluation_dataset(dataset_id)
+        data = service.delete_evaluation_dataset(dataset_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", ""))
     except Exception as e:
         raise HTTPException(
@@ -51,14 +52,13 @@ async def delete_evaluation_dataset(
 
 
 @router.get("/evaluate/{dataset_id}",response_model=ServerResponse)
-async def evaluate_dataset_api(dataset_id: str,background_tasks: BackgroundTasks,service: EvaluationService = Depends(get_evaluation_service),jwt_payload: dict = Depends(jwt_validator)
+def evaluate_dataset_api(dataset_id: str,background_tasks: BackgroundTasks,service: EvaluationService = Depends(get_service),jwt_payload: dict = Depends(jwt_validator)
 ):
     try:
-        # Wrap the async method in a lambda for background task
-        async def bg_task():
-            await service.evaluate_langsmith_dataset(dataset_id)
-        
-        background_tasks.add_task(bg_task)
+        background_tasks.add_task(
+                service.evaluate_langsmith_dataset,
+                dataset_id
+            )
         return Utils.create_response(
             data="Evaluation started",
             success=True,
@@ -69,13 +69,13 @@ async def evaluate_dataset_api(dataset_id: str,background_tasks: BackgroundTasks
     
 
 @router.get("/get-evaluation/{evaluation_id}", response_model=ServerResponse)
-async def get_evaluation_by_id(
+def get_evaluation_by_id(
     evaluation_id: str,
-    service: EvaluationService = Depends(get_evaluation_service),jwt_payload: dict = Depends(jwt_validator)
+    service: EvaluationService = Depends(get_service),jwt_payload: dict = Depends(jwt_validator)
 
 ):
     try:
-        data = await service.get_evaluation(evaluation_id)
+        data = service.get_evaluation(evaluation_id)
         return Utils.create_response(data["data"], data["success"], data.get("error", ""))
     except Exception as e:
         raise HTTPException(
@@ -85,14 +85,14 @@ async def get_evaluation_by_id(
 
 
 @router.get("/get-all-evaluations", response_model=ServerResponse)
-async def get_all_evaluations(
+def get_all_evaluations(
     page: int = 1,
     limit: int = 10,
-    service: EvaluationService = Depends(get_evaluation_service),jwt_payload: dict = Depends(jwt_validator)
+    service: EvaluationService = Depends(get_service),jwt_payload: dict = Depends(jwt_validator)
 
 ):
     try:
-        data = await service.get_all_evaluations(page, limit)
+        data = service.get_all_evaluations(page, limit)
         return Utils.create_response(data["data"], data["success"], data.get("error", ""))
     except Exception as e:
         raise HTTPException(
