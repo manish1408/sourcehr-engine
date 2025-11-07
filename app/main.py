@@ -7,6 +7,7 @@ from app.middleware.GlobalErrorHandling import GlobalErrorHandlingMiddleware
 from app.helpers.SERP import SERPHelper
 from app.services.WebsiteCrawl import WebsiteCrawlService
 from app.services.Documents import DocumentService
+from app.services.AgentNewsService import AgentNewsService
 
 
 load_dotenv()
@@ -48,6 +49,16 @@ def startup_event():
     document_service = DocumentService()
     doc_result = document_service.schedule_processor()
     print(f"Document processor: {doc_result.get('data', 'scheduled')}")
+
+    # Trigger agent-based news generation (limited for startup)
+    agent_news_service = AgentNewsService()
+    news_results = agent_news_service.generate_for_all_dashboards(max_items=5, limit=1)
+    for dashboard_id, outcome in news_results.items():
+        success = outcome.get("success")
+        news_count = len(getattr(outcome.get("data"), "news", [])) if success else 0
+        print(
+            f"Agent news generation: dashboard={dashboard_id}, success={success}, items={news_count}"
+        )
     
     print("All scheduled tasks initialized successfully")
 
