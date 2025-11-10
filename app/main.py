@@ -7,7 +7,10 @@ from app.middleware.GlobalErrorHandling import GlobalErrorHandlingMiddleware
 from app.helpers.SERP import SERPHelper
 from app.services.WebsiteCrawl import WebsiteCrawlService
 from app.services.Documents import DocumentService
-from app.services.AgentNewsService import AgentNewsService
+from app.helpers.News import News as NewsHelper
+from app.helpers.Calendar import Calendar as CalendarHelper
+from app.helpers.DashboardCompliance import DashboardCompliance
+from app.models.Dashboard import DashboardModel
 
 
 load_dotenv()
@@ -50,14 +53,46 @@ def startup_event():
     doc_result = document_service.schedule_processor()
     print(f"Document processor: {doc_result.get('data', 'scheduled')}")
 
-    # Trigger agent-based news generation (limited for startup)
-    agent_news_service = AgentNewsService()
-    news_results = agent_news_service.generate_for_all_dashboards(max_items=5, limit=1)
-    for dashboard_id, outcome in news_results.items():
-        success = outcome.get("success")
-        news_count = len(getattr(outcome.get("data"), "news", [])) if success else 0
+    dashboard_model = DashboardModel()
+    dashboards = dashboard_model.list_dashboards({}, 0, 5)
+
+    # Trigger helper-based news generation
+    news_helper = NewsHelper()
+    for dashboard in dashboards:
+        dashboard_id = str(dashboard.get("_id")) if isinstance(dashboard, dict) else str(getattr(dashboard, "id", ""))
+        if not dashboard_id:
+            continue
+        result = news_helper.retrieve_news(dashboard_id)
+        success = result.get("success")
+        items = len(result.get("data", [])) if success else 0
         print(
-            f"Agent news generation: dashboard={dashboard_id}, success={success}, items={news_count}"
+            f"News helper run: dashboard={dashboard_id}, success={success}, items={items}"
+        )
+
+    # Trigger compliance generation using existing helper
+    compliance_helper = DashboardCompliance()
+    for dashboard in dashboards:
+        dashboard_id = str(dashboard.get("_id")) if isinstance(dashboard, dict) else str(getattr(dashboard, "id", ""))
+        if not dashboard_id:
+            continue
+        result = compliance_helper.retrieve_law_changes(dashboard_id)
+        success = result.get("success")
+        entries = len(result.get("data", [])) if success else 0
+        print(
+            f"Compliance helper run: dashboard={dashboard_id}, success={success}, entries={entries}"
+        )
+
+    # Trigger legal calendar generation using helper
+    calendar_helper = CalendarHelper()
+    for dashboard in dashboards:
+        dashboard_id = str(dashboard.get("_id")) if isinstance(dashboard, dict) else str(getattr(dashboard, "id", ""))
+        if not dashboard_id:
+            continue
+        result = calendar_helper.retrieve_calendar(dashboard_id)
+        success = result.get("success")
+        events = len(result.get("data", [])) if success else 0
+        print(
+            f"Calendar helper run: dashboard={dashboard_id}, success={success}, events={events}"
         )
     
     print("All scheduled tasks initialized successfully")
