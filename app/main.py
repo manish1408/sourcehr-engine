@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from app.helpers.Calendar import Calendar as CalendarHelper
 from app.helpers.DashboardCompliance import DashboardCompliance
 from app.helpers.Database import MongoDB
+from app.helpers.GeneralNews import GeneralNewsHelper
 from app.helpers.News import News as NewsHelper
 from app.helpers.SERP import SERPHelper
 from app.middleware.Cors import add_cors_middleware
@@ -74,6 +75,22 @@ def run_calendar_job(limit: Optional[int] = None) -> None:
         print(f"[Calendar] dashboard={dashboard_id} success={success} events={events}")
 
 
+def run_general_news_job() -> None:
+    helper = GeneralNewsHelper()
+    result = helper.generate_daily_summary()
+    summary = result.get("data")
+    success = result.get("success")
+    if summary and summary.articles:
+        print(
+            f"[GeneralNews] date={summary.summaryDate} success={success} "
+            f"articles={len(summary.articles)}"
+        )
+        for article in summary.articles:
+            print(f"  - {article.title}: {article.description}")
+    else:
+        print(f"[GeneralNews] success={success}, no articles generated")
+
+
 @app.on_event("startup")
 def startup_event():
     connection_string = os.getenv("MONGODB_CONNECTION_STRING")
@@ -100,18 +117,41 @@ def startup_event():
     doc_result = document_service.schedule_processor()
     print(f"Document processor: {doc_result.get('data', 'scheduled')}")
 
-    # Kick off initial runs
-    run_news_job()
-    run_compliance_job()
-    run_calendar_job()
+    scheduler.add_job(
+        run_news_job,
+        trigger="interval",
+        hours=23.5,
+        id="news_job",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_compliance_job,
+        trigger="interval",
+        hours=23.5,
+        id="compliance_job",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_calendar_job,
+        trigger="interval",
+        hours=23.5,
+        id="calendar_job",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_general_news_job,
+        trigger="interval",
+        hours=24,
+        # minutes=1,
+        id="general_news_job",
+        replace_existing=True,
+    )
+    print("General news job scheduled to run every 24 hours")
 
-    # Schedule recurring jobs every 23 hours 30 minutes
-    scheduler.add_job(run_news_job, "interval", hours=23, minutes=30, id="news_job", replace_existing=True)
-    scheduler.add_job(run_compliance_job, "interval", hours=23, minutes=30, id="compliance_job", replace_existing=True)
-    scheduler.add_job(run_calendar_job, "interval", hours=23, minutes=30, id="calendar_job", replace_existing=True)
     scheduler.start()
 
     print("All scheduled tasks initialized successfully")
+
 
 
 @app.on_event("shutdown")
