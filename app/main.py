@@ -14,6 +14,8 @@ from app.helpers.SERP import SERPHelper
 from app.middleware.Cors import add_cors_middleware
 from app.middleware.GlobalErrorHandling import GlobalErrorHandlingMiddleware
 from app.models.Dashboard import DashboardModel
+from app.models.Queue import QueueModel
+from app.schemas.Queue import QueueStatus, QueueType
 from app.services.Documents import DocumentService
 from app.services.WebsiteCrawl import WebsiteCrawlService
 
@@ -91,6 +93,41 @@ def run_general_news_job() -> None:
         print(f"[GeneralNews] success={success}, no articles generated")
 
 
+def run_queue_job() -> None:
+    queue_model = QueueModel()
+    processed = 0
+    while processed < 5:
+        entry = queue_model.claim_next()
+        if not entry:
+            if processed == 0:
+                print("[Queue] No pending entries")
+            break
+
+        dashboard_id = entry.dashboardId
+        entry_id = entry.id
+        print(f"[Queue] Processing entry {entry_id} type={entry.type} dashboard={dashboard_id}")
+
+        try:
+            if entry.type == QueueType.NEWS:
+                NewsHelper().retrieve_news(dashboard_id)
+            elif entry.type == QueueType.CALENDAR:
+                CalendarHelper().retrieve_calendar(dashboard_id)
+            elif entry.type == QueueType.COMPLIANCE:
+                DashboardCompliance().retrieve_law_changes(dashboard_id)
+            else:
+                raise ValueError(f"Unsupported queue type: {entry.type}")
+
+            queue_model.mark_status(entry_id, QueueStatus.COMPLETED)
+            print(f"[Queue] Completed entry {entry_id}")
+        except Exception as exc:  # pylint: disable=broad-except
+            queue_model.mark_status(entry_id, QueueStatus.FAILED, str(exc))
+            print(f"[Queue] Failed entry {entry_id}: {exc}")
+        finally:
+            processed += 1
+    if processed:
+        print(f"[Queue] Batch processed {processed} entr{'y' if processed == 1 else 'ies'}")
+
+
 @app.on_event("startup")
 def startup_event():
     connection_string = os.getenv("MONGODB_CONNECTION_STRING")
@@ -117,36 +154,45 @@ def startup_event():
     doc_result = document_service.schedule_processor()
     print(f"Document processor: {doc_result.get('data', 'scheduled')}")
 
-    scheduler.add_job(
-        run_news_job,
-        trigger="interval",
-        hours=1,
-        id="news_job",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        run_compliance_job,
-        trigger="interval",
-        hours=1,
-        id="compliance_job",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        run_calendar_job,
-        trigger="interval",
-        hours=1,
-        id="calendar_job",
-        replace_existing=True,
-    )
-    scheduler.add_job(
-        run_general_news_job,
-        trigger="interval",
-        hours=1,
-        # minutes=1,
-        id="general_news_job",
-        replace_existing=True,
-    )
-    print("General news job scheduled to run every 1 hour")
+    # scheduler.add_job(
+    #     run_news_job,
+    #     trigger="interval",
+    #     hours=23.5,
+    #     id="news_job",
+    #     replace_existing=True,
+    # )
+    # scheduler.add_job(
+    #     run_compliance_job,
+    #     trigger="interval",
+    #     hours=23.5,
+    #     id="compliance_job",
+    #     replace_existing=True,
+    # )
+    # scheduler.add_job(
+    #     run_calendar_job,
+    #     trigger="interval",
+    #     hours=23.5,
+    #     id="calendar_job",
+    #     replace_existing=True,
+    # )
+    # scheduler.add_job(
+    #     run_general_news_job,
+    #     trigger="interval",
+    #     hours=24,
+    #     id="general_news_job",
+    #     replace_existing=True,
+    # )
+    # scheduler.add_job(
+    #     run_queue_job,
+    #     trigger="interval",
+    #     minutes=1,
+    #     id="queue_job",
+    #     replace_existing=True,
+    # )
+    print("General news job scheduled to run every 24 hours")
+    print("Queue job scheduled to run every minute")
+
+    run_queue_job()
 
     scheduler.start()
 
