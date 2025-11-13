@@ -7,20 +7,20 @@ from pydantic import BaseModel, Field
 from app.schemas.PyObjectId import PyObjectId
 
 
-class GeneralNewsArticle(BaseModel):
+class GeneralNewsItem(BaseModel):
     title: str
     description: str
 
 
 class GeneralNewsSummary(BaseModel):
     summaryDate: str
-    articles: List[GeneralNewsArticle]
+    articles: List[GeneralNewsItem]
 
 
 class GeneralNewsDocument(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=ObjectId, alias="_id")
     summaryDate: str
-    articles: List[GeneralNewsArticle]
+    articles: List[GeneralNewsItem]
 
     class Config:
         populate_by_name = True

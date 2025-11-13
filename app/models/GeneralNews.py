@@ -19,18 +19,8 @@ class GeneralNewsModel:
         self.collection = database[collection_name]
         self.collection.create_index("summaryDate", unique=True)
 
-    def get_by_date(self, summary_date: date) -> Optional[GeneralNewsDocument]:
-        doc = self.collection.find_one({"summaryDate": _as_iso_string(summary_date)})
-        return GeneralNewsDocument(**doc) if doc else None
-
-    def upsert_summary(self, document: GeneralNewsDocument) -> str:
+    def replace_summary(self, document: GeneralNewsDocument) -> str:
+        self.collection.delete_many({"summaryDate": document.summaryDate})
         payload = document.model_dump(by_alias=True)
-        result = self.collection.update_one(
-            {"summaryDate": document.summaryDate},
-            {"$set": payload},
-            upsert=True,
-        )
-        if result.upserted_id:
-            return str(result.upserted_id)
-        existing = self.collection.find_one({"summaryDate": document.summaryDate}, {"_id": 1})
-        return str(existing["_id"]) if existing else ""
+        result = self.collection.insert_one(payload)
+        return str(result.inserted_id)

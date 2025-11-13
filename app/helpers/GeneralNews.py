@@ -7,7 +7,7 @@ from langchain_openai import AzureChatOpenAI
 
 from app.helpers.SERP import SERPHelper
 from app.models.GeneralNews import GeneralNewsModel
-from app.schemas.GeneralNews import GeneralNewsArticle, GeneralNewsDocument, GeneralNewsSummary
+from app.schemas.GeneralNews import GeneralNewsDocument, GeneralNewsItem, GeneralNewsSummary
 
 
 class GeneralNewsHelper:
@@ -34,18 +34,21 @@ class GeneralNewsHelper:
 
         document = GeneralNewsDocument(
             summaryDate=summary.summaryDate,
-            articles=[GeneralNewsArticle(**article.model_dump()) for article in summary.articles],
+            articles=[GeneralNewsItem(**item.model_dump()) for item in summary.articles],
         )
-        self.model.upsert_summary(document)
+        self.model.replace_summary(document)
         return {"success": True, "data": document}
 
     def _fetch_serp_results(self) -> List[dict]:
         query = "latest employment law updates in the United States"
         try:
-            results = self.serp_helper.serp_results(query)[:5]
+            results = self.serp_helper.serp_results(query + " site:.gov")[:20]
+            if len(results) < 15:
+                supplemental = self.serp_helper.serp_results("USA employment law update 2025")[:20]
+                results.extend(supplemental)
             if not results:
                 print("[GeneralNewsHelper] No SERP results returned for query")
-            return results
+            return results[:20]
         except Exception as exc:  # pylint: disable=broad-except
             print(f"[GeneralNewsHelper] SERP fetch failed: {exc}")
             return []
@@ -72,10 +75,9 @@ class GeneralNewsHelper:
         user_prompt = HumanMessage(
             content=(
                 "Using the context below, generate a structured JSON object with these rules:\n"
-                "- Include at most five articles.\n"
+                "- Produce exactly 15 articles. If the context is insufficient, rely on verified, recent public information to reach 15 items.\n"
                 "- Each article must have a concise Title and a Description limited to 1-3 sentences.\n"
                 "- Avoid duplication; each article should focus on a unique development.\n"
-                "- If context is missing, fall back to widely reported, recent employment-law updates.\n"
                 f"Date: {target_date.isoformat()}\n"
                 "Context:\n"
                 f"{context if context else 'No SERP results were retrieved; rely on verified high-level knowledge of recent US employment law developments.'}"
@@ -84,13 +86,28 @@ class GeneralNewsHelper:
 
         structured_llm = self.chat.with_structured_output(GeneralNewsSummary)
         response = structured_llm.invoke([system_prompt, user_prompt])
-        # Ensure descriptions are within the requested length
+        # Ensure descriptions are within the requested length and limit to 15 articles
         trimmed_articles = []
-        for article in response.articles[:5]:
-            sentences = article.description.split(".")
+        articles = response.articles
+        if len(articles) < 15:
+            missing = 15 - len(articles)
+            for _ in range(missing):
+                articles.append(
+                    GeneralNewsItem(
+                        title="General Employment Law Update",
+                        description="Summary not provided. Please research recent employment law developments in the United States.",
+                    )
+                )
+        for item in articles[:15]:
+            sentences = item.description.split(".")
             trimmed_description = ".".join([s.strip() for s in sentences if s.strip()][:3])
             if trimmed_description and not trimmed_description.endswith("."):
                 trimmed_description += "."
-            trimmed_articles.append(GeneralNewsArticle(title=article.title.strip(), description=trimmed_description.strip()))
+            trimmed_articles.append(
+                GeneralNewsItem(
+                    title=item.title.strip(),
+                    description=trimmed_description.strip(),
+                )
+            )
         response.articles = trimmed_articles
         return response

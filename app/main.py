@@ -120,33 +120,33 @@ def startup_event():
     scheduler.add_job(
         run_news_job,
         trigger="interval",
-        hours=23.5,
+        hours=1,
         id="news_job",
         replace_existing=True,
     )
     scheduler.add_job(
         run_compliance_job,
         trigger="interval",
-        hours=23.5,
+        hours=1,
         id="compliance_job",
         replace_existing=True,
     )
     scheduler.add_job(
         run_calendar_job,
         trigger="interval",
-        hours=23.5,
+        hours=1,
         id="calendar_job",
         replace_existing=True,
     )
     scheduler.add_job(
         run_general_news_job,
         trigger="interval",
-        hours=24,
+        hours=1,
         # minutes=1,
         id="general_news_job",
         replace_existing=True,
     )
-    print("General news job scheduled to run every 24 hours")
+    print("General news job scheduled to run every 1 hour")
 
     scheduler.start()
 
