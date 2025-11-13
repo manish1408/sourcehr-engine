@@ -23,3 +23,8 @@ class DashboardComplianceModel:
         """
         cursor = self.collection.find({"dashboardId": dashboard_id})
         return [DashboardCompliance(**doc) for doc in cursor]
+
+    def delete_by_dashboard(self, dashboard_id: str) -> int:
+        """Delete all compliance records for the given dashboard."""
+        result = self.collection.delete_many({"dashboardId": dashboard_id})
+        return result.deleted_count

@@ -272,12 +272,12 @@ class DashboardCompliance:
                 
                 
             law_changes = self.format_law_changes(message_content)
-                
-                
-                
-            # Build a minimal valid payload structure (empty list placeholder)
-            
-    
+
+            # Remove existing compliance entries for this dashboard before inserting new ones
+            deleted_count = self.dashboard_compliance_model.delete_by_dashboard(dashboard_id)
+            if deleted_count:
+                print(f"[DashboardCompliance] Removed {deleted_count} existing entries for dashboard {dashboard_id}")
+
             compliance_payload = {
                 "dashboardId": dashboard_id,
                 "data": law_changes,
