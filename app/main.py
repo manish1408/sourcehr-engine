@@ -154,45 +154,44 @@ def startup_event():
     doc_result = document_service.schedule_processor()
     print(f"Document processor: {doc_result.get('data', 'scheduled')}")
 
-    # scheduler.add_job(
-    #     run_news_job,
-    #     trigger="interval",
-    #     hours=23.5,
-    #     id="news_job",
-    #     replace_existing=True,
-    # )
-    # scheduler.add_job(
-    #     run_compliance_job,
-    #     trigger="interval",
-    #     hours=23.5,
-    #     id="compliance_job",
-    #     replace_existing=True,
-    # )
-    # scheduler.add_job(
-    #     run_calendar_job,
-    #     trigger="interval",
-    #     hours=23.5,
-    #     id="calendar_job",
-    #     replace_existing=True,
-    # )
-    # scheduler.add_job(
-    #     run_general_news_job,
-    #     trigger="interval",
-    #     hours=24,
-    #     id="general_news_job",
-    #     replace_existing=True,
-    # )
-    # scheduler.add_job(
-    #     run_queue_job,
-    #     trigger="interval",
-    #     minutes=1,
-    #     id="queue_job",
-    #     replace_existing=True,
-    # )
+    scheduler.add_job(
+        run_news_job,
+        trigger="interval",
+        hours=23.5,
+        id="news_job",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_compliance_job,
+        trigger="interval",
+        hours=23.5,
+        id="compliance_job",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_calendar_job,
+        trigger="interval",
+        hours=23.5,
+        id="calendar_job",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_general_news_job,
+        trigger="interval",
+        hours=24,
+        id="general_news_job",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_queue_job,
+        trigger="interval",
+        minutes=1,
+        id="queue_job",
+        replace_existing=True,
+    )
+    
     print("General news job scheduled to run every 24 hours")
     print("Queue job scheduled to run every minute")
-
-    run_queue_job()
 
     scheduler.start()
 
