@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 
 from app.helpers.Calendar import Calendar as CalendarHelper
-from app.helpers.DashboardCompliance import DashboardCompliance
+from app.helpers.CourtDecisions import CourtDecisions
 from app.helpers.Database import MongoDB
 from app.helpers.GeneralNews import GeneralNewsHelper
 from app.helpers.News import News as NewsHelper
@@ -54,12 +54,12 @@ def run_news_job(limit: Optional[int] = None) -> None:
 
 
 def run_compliance_job(limit: Optional[int] = None) -> None:
-    compliance_helper = DashboardCompliance()
+    court_decisions_helper = CourtDecisions()
     for dashboard in _iter_dashboards(limit):
         dashboard_id = str(dashboard.get("_id")) if isinstance(dashboard, dict) else str(getattr(dashboard, "id", ""))
         if not dashboard_id:
             continue
-        result = compliance_helper.retrieve_law_changes(dashboard_id)
+        result = court_decisions_helper.retrieve_court_decisions(dashboard_id)
         success = result.get("success")
         entries = len(result.get("data", []) or []) if success else 0
         print(f"[Compliance] dashboard={dashboard_id} success={success} entries={entries}")
@@ -113,7 +113,7 @@ def run_queue_job() -> None:
             elif entry.type == QueueType.CALENDAR:
                 CalendarHelper().retrieve_calendar(dashboard_id)
             elif entry.type == QueueType.COMPLIANCE:
-                DashboardCompliance().retrieve_law_changes(dashboard_id)
+                CourtDecisions().retrieve_court_decisions(dashboard_id)
             else:
                 raise ValueError(f"Unsupported queue type: {entry.type}")
 
