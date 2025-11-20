@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from bson import ObjectId
 from pymongo import ReturnDocument
@@ -39,6 +39,31 @@ class QueueModel:
         if doc:
             return QueueEntry(**doc)
         return None
+
+    def claim_all_pending(self) -> List[QueueEntry]:
+        """Claim all pending entries and mark them as processing."""
+        # First, find all pending entries
+        pending_docs = list(self.collection.find(
+            {"status": QueueStatus.PENDING.value}
+        ).sort("createdAt", 1))
+        
+        if not pending_docs:
+            return []
+        
+        # Extract IDs and mark them as processing
+        entry_ids = [doc["_id"] for doc in pending_docs]
+        self.collection.update_many(
+            {"_id": {"$in": entry_ids}},
+            {
+                "$set": {
+                    "status": QueueStatus.PROCESSING.value,
+                    "updatedAt": datetime.utcnow(),
+                }
+            }
+        )
+        
+        # Return the entries
+        return [QueueEntry(**doc) for doc in pending_docs]
 
     def mark_status(self, entry_id: ObjectId, status: QueueStatus, error: Optional[str] = None) -> None:
         update_set = {

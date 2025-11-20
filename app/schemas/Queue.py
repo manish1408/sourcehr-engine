@@ -12,7 +12,7 @@ class QueueType(str, Enum):
     NEWS = "NEWS"
     CALENDAR = "CALENDAR"
     COMPLIANCE = "COMPLIANCE"
-
+    LAW_CHANGE = "LAW_CHANGE"
 
 class QueueStatus(str, Enum):
     PENDING = "PENDING"

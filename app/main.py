@@ -1,4 +1,5 @@
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Iterable, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -7,6 +8,7 @@ from fastapi import FastAPI
 
 from app.helpers.Calendar import Calendar as CalendarHelper
 from app.helpers.CourtDecisions import CourtDecisions
+from app.helpers.DashboardCompliance import DashboardCompliance
 from app.helpers.Database import MongoDB
 from app.helpers.GeneralNews import GeneralNewsHelper
 from app.helpers.News import News as NewsHelper
@@ -15,7 +17,7 @@ from app.middleware.Cors import add_cors_middleware
 from app.middleware.GlobalErrorHandling import GlobalErrorHandlingMiddleware
 from app.models.Dashboard import DashboardModel
 from app.models.Queue import QueueModel
-from app.schemas.Queue import QueueStatus, QueueType
+from app.schemas.Queue import QueueEntry, QueueStatus, QueueType
 from app.services.Documents import DocumentService
 from app.services.WebsiteCrawl import WebsiteCrawlService
 
@@ -93,39 +95,71 @@ def run_general_news_job() -> None:
         print(f"[GeneralNews] success={success}, no articles generated")
 
 
-def run_queue_job() -> None:
+def _process_queue_entry(entry: QueueEntry) -> tuple[str, bool, Optional[str]]:
+    """Process a single queue entry. Returns (entry_id, success, error_message)."""
     queue_model = QueueModel()
-    processed = 0
-    while processed < 5:
-        entry = queue_model.claim_next()
-        if not entry:
-            if processed == 0:
-                print("[Queue] No pending entries")
-            break
+    dashboard_id = entry.dashboardId
+    entry_id = entry.id
+    print(f"[Queue] Processing entry {entry_id} type={entry.type} dashboard={dashboard_id}")
 
-        dashboard_id = entry.dashboardId
-        entry_id = entry.id
-        print(f"[Queue] Processing entry {entry_id} type={entry.type} dashboard={dashboard_id}")
+    try:
+        if entry.type == QueueType.NEWS:
+            NewsHelper().retrieve_news(dashboard_id)
+        elif entry.type == QueueType.CALENDAR:
+            CalendarHelper().retrieve_calendar(dashboard_id)
+        elif entry.type == QueueType.COMPLIANCE:
+            CourtDecisions().retrieve_court_decisions(dashboard_id)
+        elif entry.type == QueueType.LAW_CHANGE:
+            DashboardCompliance().retrieve_law_changes(dashboard_id)
+        else:
+            raise ValueError(f"Unsupported queue type: {entry.type}")
 
-        try:
-            if entry.type == QueueType.NEWS:
-                NewsHelper().retrieve_news(dashboard_id)
-            elif entry.type == QueueType.CALENDAR:
-                CalendarHelper().retrieve_calendar(dashboard_id)
-            elif entry.type == QueueType.COMPLIANCE:
-                CourtDecisions().retrieve_court_decisions(dashboard_id)
-            else:
-                raise ValueError(f"Unsupported queue type: {entry.type}")
+        queue_model.mark_status(entry_id, QueueStatus.COMPLETED)
+        print(f"[Queue] Completed entry {entry_id}")
+        return (str(entry_id), True, None)
+    except Exception as exc:  # pylint: disable=broad-except
+        queue_model.mark_status(entry_id, QueueStatus.FAILED, str(exc))
+        print(f"[Queue] Failed entry {entry_id}: {exc}")
+        return (str(entry_id), False, str(exc))
 
-            queue_model.mark_status(entry_id, QueueStatus.COMPLETED)
-            print(f"[Queue] Completed entry {entry_id}")
-        except Exception as exc:  # pylint: disable=broad-except
-            queue_model.mark_status(entry_id, QueueStatus.FAILED, str(exc))
-            print(f"[Queue] Failed entry {entry_id}: {exc}")
-        finally:
-            processed += 1
-    if processed:
-        print(f"[Queue] Batch processed {processed} entr{'y' if processed == 1 else 'ies'}")
+
+def run_queue_job() -> None:
+    """Process all pending queue entries in parallel without blocking the main thread."""
+    queue_model = QueueModel()
+    entries = queue_model.claim_all_pending()
+    
+    if not entries:
+        print("[Queue] No pending entries")
+        return
+
+    print(f"[Queue] Found {len(entries)} pending entries, processing in parallel...")
+    
+    # Process entries in parallel using ThreadPoolExecutor
+    # Using max_workers to limit concurrent processing (adjust as needed)
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all tasks
+        future_to_entry = {
+            executor.submit(_process_queue_entry, entry): entry 
+            for entry in entries
+        }
+        
+        # Wait for all tasks to complete and collect results
+        completed = 0
+        failed = 0
+        for future in as_completed(future_to_entry):
+            entry = future_to_entry[future]
+            try:
+                entry_id, success, error = future.result()
+                if success:
+                    completed += 1
+                else:
+                    failed += 1
+            except Exception as exc:  # pylint: disable=broad-except
+                print(f"[Queue] Unexpected error processing entry {entry.id}: {exc}")
+                failed += 1
+    
+    print(f"[Queue] Batch processed {len(entries)} entr{'y' if len(entries) == 1 else 'ies'}: "
+          f"{completed} completed, {failed} failed")
 
 
 @app.on_event("startup")
