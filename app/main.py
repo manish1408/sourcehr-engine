@@ -82,15 +82,18 @@ def run_calendar_job(limit: Optional[int] = None) -> None:
 def run_general_news_job() -> None:
     helper = GeneralNewsHelper()
     result = helper.generate_daily_summary()
-    summary = result.get("data")
+    articles = result.get("data", [])
     success = result.get("success")
-    if summary and summary.articles:
+    if articles and len(articles) > 0:
+        # Get the date from the first article
+        summary_date = articles[0].get("summaryDate", "unknown") if articles else "unknown"
         print(
-            f"[GeneralNews] date={summary.summaryDate} success={success} "
-            f"articles={len(summary.articles)}"
+            f"[GeneralNews] date={summary_date} success={success} "
+            f"articles={len(articles)}"
         )
-        for article in summary.articles:
-            print(f"  - {article.title}: {article.description}")
+        for article in articles:
+            org_name = article.get("organizationName", "N/A")
+            print(f"  - {article.get('title', 'N/A')}: {article.get('description', 'N/A')} [Org: {org_name}]")
     else:
         print(f"[GeneralNews] success={success}, no articles generated")
 

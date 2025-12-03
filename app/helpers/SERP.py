@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 import asyncio
 import concurrent.futures
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 from app.helpers.VectorDB import VectorDB
 from app.helpers.Scraper import WebsiteScraper
@@ -182,6 +182,54 @@ class SERPHelper:
                 raise ValueError("Failed to parse BrightData 'body' JSON")
         else:
             return data
+
+    def serp_image_results(self, query: str):
+        """
+        Calls BrightData SERP API for Google Images search synchronously.
+        """
+        key = os.getenv("BRIGHTDATA_SERP_KEY")
+        if not key:
+            raise ValueError("Missing BRIGHTDATA_SERP_KEY in environment variables")
+
+        # Build a valid Google Images Search URL
+        qs = urlencode({"q": query, "tbm": "isch"})
+        google_url = f"https://www.google.com/search?{qs}&brd_json=1"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {key}",
+        }
+
+        payload = {
+            "zone": "source_hr_serp",
+            "url": google_url,
+            "format": "json"
+        }
+
+        r = requests.post("https://api.brightdata.com/request", headers=headers, json=payload)
+
+        if r.status_code != 200:
+            raise RuntimeError(
+                f"BrightData SERP API failed: {r.status_code}, {r.text}\n"
+                f"Payload url={google_url}"
+            )
+
+        return r.json()
+
+    @staticmethod
+    def extract_final_image_url(api_response: dict) -> Optional[str]:
+        """
+        Extract the first image URL from SERP API response.
+        """
+        body = json.loads(api_response["body"]) if isinstance(api_response.get("body"), str) else api_response.get("body", {})
+        
+        images = body.get("images", [])
+        
+        if not images:
+            return None
+        
+        # Return the original_image URL from the first image
+        return images[0].get("original_image")
         
         
     def scrape_pending_serp_url(self):

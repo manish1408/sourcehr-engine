@@ -10,6 +10,8 @@ from app.schemas.PyObjectId import PyObjectId
 class GeneralNewsItem(BaseModel):
     title: str
     description: str
+    organizationName: Optional[str] = None
+    logoUrl: Optional[str] = None
 
 
 class GeneralNewsSummary(BaseModel):
