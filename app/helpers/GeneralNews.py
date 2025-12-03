@@ -40,12 +40,10 @@ class GeneralNewsHelper:
         return {"success": True, "data": document}
 
     def _fetch_serp_results(self) -> List[dict]:
-        query = "latest employment law updates in the United States"
+        query = 'latest US employment law news OR "court ruling" OR "workplace discrimination" OR "hiring bias" OR "wrongful termination" OR "labor law update" OR "EEOC lawsuit" OR "company sued" OR "employee rights case" site:news.google.com'
         try:
-            results = self.serp_helper.serp_results(query + " site:.gov")[:20]
-            if len(results) < 15:
-                supplemental = self.serp_helper.serp_results("USA employment law update 2025")[:20]
-                results.extend(supplemental)
+            results = self.serp_helper.serp_results(query)[:20]
+           
             if not results:
                 print("[GeneralNewsHelper] No SERP results returned for query")
             return results[:20]
