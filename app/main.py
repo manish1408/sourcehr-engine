@@ -79,6 +79,20 @@ def run_calendar_job(limit: Optional[int] = None) -> None:
         print(f"[Calendar] dashboard={dashboard_id} success={success} events={events}")
 
 
+def run_law_changes_job(limit: Optional[int] = None) -> None:
+    """Run law changes retrieval for all dashboards."""
+    compliance_helper = DashboardCompliance()
+    for dashboard in _iter_dashboards(limit):
+        dashboard_id = str(dashboard.get("_id")) if isinstance(dashboard, dict) else str(getattr(dashboard, "id", ""))
+        if not dashboard_id:
+            continue
+        result = compliance_helper.retrieve_law_changes(dashboard_id)
+        success = result.get("success")
+        law_changes = result.get("data", [])
+        items = len(law_changes) if success and law_changes else 0
+        print(f"[LawChanges] dashboard={dashboard_id} success={success} items={items}")
+
+
 def run_general_news_job() -> None:
     helper = GeneralNewsHelper()
     result = helper.generate_daily_summary()
@@ -226,9 +240,19 @@ def startup_event():
         id="queue_job",
         replace_existing=True,
     )
+    scheduler.add_job(
+        run_law_changes_job,
+        trigger="cron",
+        day_of_week="sun",
+        hour=0,
+        minute=1,
+        id="law_changes_job",
+        replace_existing=True,
+    )
     
     print("General news job scheduled to run every 24 hours")
     print("Queue job scheduled to run every minute")
+    print("Law changes job scheduled to run every Sunday at midnight")
 
     scheduler.start()
 

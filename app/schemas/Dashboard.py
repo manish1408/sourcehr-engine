@@ -73,6 +73,7 @@ class DashboardCreate(BaseModel):
     locations: List[LocationSchema]
     industries: List[IndustrySchema]
     topics: List[TopicSchema]
+    region: Optional[List[str]] = None
     displayOptions: DisplayOptions = Field(default_factory=DisplayOptions)
     widgets: WidgetOptions = Field(default_factory=WidgetOptions)
     savedSearches: Optional[List[str]] = []
@@ -87,6 +88,7 @@ class DashboardUpdate(BaseModel):
     locations: List[LocationSchema]=None
     industries: List[IndustrySchema]=None
     topics: List[TopicSchema]=None
+    region: Optional[List[str]]=None
     displayOptions: Optional[DisplayOptions]=None
     widgets: Optional[WidgetOptions]=None
     savedSearches: Optional[List[str]]=None
@@ -100,6 +102,7 @@ class DashboardSchema(BaseModel):
     locations: List[LocationSchema]
     industries: List[IndustrySchema]
     topics: List[TopicSchema]
+    region: Optional[List[str]] = None
     displayOptions: DisplayOptions
     widgets: WidgetOptions
     savedSearches: List[str]

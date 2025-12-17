@@ -38,7 +38,7 @@ class DashboardCompliance:
         )
     
     # Tool implementations
-    def _tool_search_documents(self, query: str, filters: dict = None, top_k: int = 10):
+    def _tool_search_documents(self, query: str, filters: dict = None, top_k: int = 10, region_slugs: list = None):
         try:
             filters = filters or {}
             # Pinecone filter operators where applicable
@@ -54,6 +54,14 @@ class DashboardCompliance:
                 value = filters.get(key)
                 if value:
                     pinecone_filter[key] = value
+            # Add region_slug filter if regions are provided and not already in filters
+            if region_slugs and "region_slug" not in pinecone_filter:
+                if len(region_slugs) == 1:
+                    pinecone_filter["region_slug"] = region_slugs[0]
+                elif len(region_slugs) > 1:
+                    # Pinecone supports "$in" for multiple values
+                    pinecone_filter["region_slug"] = {"$in": region_slugs}
+
             # time range
             gt = filters.get("discussedTimestamp_gt")
             lt = filters.get("discussedTimestamp_lt")
@@ -101,6 +109,7 @@ class DashboardCompliance:
         locations = getattr(dashboard, "locations", [])
         industries = getattr(dashboard, "industries", [])
         topics = getattr(dashboard, "topics", [])
+        regions = getattr(dashboard, "region", []) or []
         location_slugs = []
         for region in locations:
             for loc in getattr(region, "locations", []):
@@ -126,10 +135,13 @@ class DashboardCompliance:
         location_names = [slug.replace('-', ' ').title() for slug in location_slugs] if location_slugs else []
         industry_names = [slug.replace('-', ' ').title() for slug in industry_slugs] if industry_slugs else []
         topic_names = [slug.replace('-', ' ').title() for slug in topic_slugs] if topic_slugs else []
+        region_names = [region.replace('-', ' ').title() if isinstance(region, str) else str(region).replace('-', ' ').title() for region in regions] if regions else []
         dashboard_choices = {
             "location_names": location_names,
             "industry_names": industry_names,
-            "topic_names": topic_names
+            "topic_names": topic_names,
+            "region_names": region_names,
+            "regions": regions
         }
         return dashboard_choices
         
@@ -140,6 +152,8 @@ class DashboardCompliance:
             location_str = ", ".join(dashboard_choices.get("location_names", [])) 
             industry_str = ", ".join(dashboard_choices.get("industry_names", [])) 
             topic_str = ", ".join(dashboard_choices.get("topic_names", [])) 
+            region_str = ", ".join(dashboard_choices.get("region_names", [])) if dashboard_choices.get("region_names") else "" 
+
             tools = [
                         {
                             "type": "function",
@@ -227,6 +241,7 @@ class DashboardCompliance:
                         - Locations: {location_str}
                         - Industries: {industry_str}
                         - Topics: {topic_str}
+                        - Regions: {region_str if region_str else "all regions"}
                         """
 
                     }
@@ -244,7 +259,9 @@ class DashboardCompliance:
                     function_name = tool_call.function.name
                     args = json.loads(tool_call.function.arguments)
                     if function_name == "search_documents":
-                        result = self._tool_search_documents(**args)
+                        # Add region filtering if regions exist in dashboard
+                        region_slugs = dashboard_choices.get("regions", [])
+                        result = self._tool_search_documents(**args, region_slugs=region_slugs)
                     elif function_name == "fetch_serp_content":
                         result = self._tool_fetch_serp_content(**args)
                     elif function_name == "get_webpage_content":
