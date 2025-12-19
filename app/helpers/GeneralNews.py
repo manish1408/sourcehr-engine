@@ -1,6 +1,6 @@
 import os
-from datetime import date
-from typing import List, Optional
+from datetime import date, datetime, timedelta
+from typing import List, Optional, Set
 
 from langchain.schema import HumanMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI
@@ -80,8 +80,8 @@ class GeneralNewsHelper:
             )
             articles_with_logos.append(article_with_logo)
 
-        # Delete all previous entries for this date before inserting new ones
-        self.model.delete_by_date(target_date.isoformat())
+        # Delete all previous entries from database before inserting new ones
+        self.model.delete_all()
 
         # Save each article at root level instead of as an array
         saved_articles = []
@@ -94,16 +94,164 @@ class GeneralNewsHelper:
 
         return {"success": True, "data": saved_articles}
 
+    def _build_optimized_queries(self) -> List[dict]:
+        """
+        Returns a list of query payloads.
+        Each payload can include query text + SERP params (date filter, gl, hl).
+        """
+
+        queries = []
+
+        # -------------------------------
+        # 1. CORE EMPLOYMENT SETTLEMENTS
+        # -------------------------------
+        queries.append({
+            "q": (
+                '('
+                '("employment lawsuit" OR "labor lawsuit" OR "EEOC lawsuit" '
+                'OR "wage and hour lawsuit" OR "wrongful termination" '
+                'OR "sexual harassment" OR "retaliation") '
+                'AND ("settlement" OR "verdict" OR "jury awarded" '
+                'OR "consent decree" OR "damages") '
+                'AND ("million" OR "$")'
+                ') '
+                'AND ("settled" OR "verdict" OR "awarded" OR "agreement") '
+                'AND NOT ("lawsuit filed" OR "seeking" OR "alleges" OR "claims")'
+            )
+        })
+
+        # -------------------------------
+        # 2. US-ONLY JURISDICTION
+        # -------------------------------
+        queries.append({
+            "q": (
+                '('
+                '("employment lawsuit" OR "labor lawsuit" OR "EEOC lawsuit") '
+                'AND ("settlement" OR "verdict" OR "consent decree") '
+                'AND ("United States" OR "U.S." OR "California" OR "New York" '
+                'OR "Texas" OR "Florida" OR "Illinois") '
+                'AND ("million" OR "$")'
+                ') '
+                'AND ("settled" OR "verdict" OR "awarded") '
+                'AND NOT ("lawsuit filed" OR "alleges")'
+            )
+        })
+
+        # -------------------------------
+        # 3. INTERNATIONAL / TRIBUNALS
+        # -------------------------------
+        queries.append({
+            "q": (
+                '('
+                '("employment tribunal" OR "labour court" OR "fair work commission" '
+                'OR "employment lawsuit") '
+                'AND ("settlement" OR "ruling" OR "verdict") '
+                'AND ("UK" OR "Canada" OR "Australia" OR "European Union" '
+                'OR "Germany" OR "France" OR "India") '
+                'AND ("million" OR "$")'
+                ') '
+                'AND ("settled" OR "awarded" OR "agreement") '
+                'AND NOT ("filed" OR "alleged")'
+            )
+        })
+
+        # -------------------------------
+        # 4. INDUSTRY-AGNOSTIC
+        # -------------------------------
+        queries.append({
+            "q": (
+                '('
+                '("workplace discrimination" OR "wage theft" OR "unpaid overtime" '
+                'OR "FLSA violation" OR "misclassification" OR "ADA violation") '
+                'AND ("settlement" OR "verdict" OR "damages awarded") '
+                'AND ("company" OR "employer" OR "corporation") '
+                'AND ("million" OR "$")'
+                ') '
+                'AND ("settled" OR "resolved" OR "agreed to pay") '
+                'AND NOT ("complaint filed" OR "seeking damages")'
+            )
+        })
+
+        # -------------------------------
+        # 5. MAJOR CASES ($5M+)
+        # -------------------------------
+        queries.append({
+            "q": (
+                '('
+                '("employment lawsuit" OR "EEOC lawsuit" OR "class action settlement") '
+                'AND ("$5 million" OR "$10 million" OR "$20 million" '
+                'OR "$50 million" OR "$100 million")'
+                ')'
+            )
+        })
+
+        return queries
+
+    
+    # ---------------------------------------------------------------------
+    # SERP FETCH
+    # ---------------------------------------------------------------------
     def _fetch_serp_results(self) -> List[dict]:
-        query = 'latest US employment law news OR "court ruling" OR "workplace discrimination" OR "hiring bias" OR "wrongful termination" OR "labor law update" OR "EEOC lawsuit" OR "company sued" OR "employee rights case" site:news.google.com'
-        try:
-            results = self.serp_helper.serp_results(query)[:20]
-            if not results:
-                print("[GeneralNewsHelper] No SERP results returned for query")
-            return results[:20]
-        except Exception as exc:  # pylint: disable=broad-except
-            print(f"[GeneralNewsHelper] SERP fetch failed: {exc}")
-            return []
+        """
+        Fetch SERP results using BrightData Google Search via SERPHelper.
+        Date filtering is embedded directly into the query string.
+        """
+        queries = self._build_optimized_queries()
+        all_results = []
+
+        print(f"[GeneralNewsHelper] Executing {len(queries)} optimized queries...")
+
+        for idx, payload in enumerate(queries, start=1):
+            try:
+                query = payload["q"]
+                print(f"[SERP] Executing query {idx}")
+
+                results = self.serp_helper.serp_results(query)
+
+                if not results:
+                    print(f"[SERP] Query {idx} returned no results")
+                    continue
+
+                # BrightData returns Google organic results
+                # Limit per query to control noise
+                limited_results = results[:15]
+
+                all_results.extend(limited_results)
+                print(f"[SERP] Query {idx} returned {len(limited_results)} results")
+
+            except Exception as exc:
+                print(f"[SERP] Query {idx} failed: {exc}")
+
+        print(f"[SERP] Total results before deduplication: {len(all_results)}")
+
+        deduplicated_results = self._deduplicate_results(all_results)
+
+        print(f"[SERP] Total results after deduplication: {len(deduplicated_results)}")
+
+        # Final cap to protect LLM + DB
+        return deduplicated_results[:50]
+
+
+    # ---------------------------------------------------------------------
+    # DEDUPLICATION
+    # ---------------------------------------------------------------------
+    def _deduplicate_results(self, results: List[dict]) -> List[dict]:
+        seen_urls: Set[str] = set()
+        seen_titles: Set[str] = set()
+        deduped = []
+
+        for r in results:
+            url = (r.get("link") or "").split("?")[0].lower()
+            title = " ".join((r.get("title") or "").lower().split())
+
+            if url in seen_urls or title in seen_titles:
+                continue
+
+            seen_urls.add(url)
+            seen_titles.add(title)
+            deduped.append(r)
+
+        return deduped
 
     @staticmethod
     def _format_serp_context(results: List[dict]) -> str:

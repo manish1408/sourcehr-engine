@@ -55,6 +55,26 @@ class GeneralNewsModel:
         result = self.collection.delete_many({"summaryDate": summary_date})
         return result.deleted_count
 
+    def delete_all(self) -> int:
+        """Delete all entries from the database and their associated blob images."""
+        # First, fetch all entries to get their logo URLs
+        entries = list(self.collection.find({}))
+        
+        # Delete blob images if they exist
+        for entry in entries:
+            logo_url = entry.get("logoUrl")
+            if logo_url:
+                try:
+                    self.azure_blob.delete_file(logo_url)
+                    print(f"[GeneralNewsModel] Deleted blob image: {logo_url}")
+                except Exception as e:
+                    print(f"[GeneralNewsModel] Failed to delete blob image {logo_url}: {e}")
+        
+        # Delete all database entries
+        result = self.collection.delete_many({})
+        print(f"[GeneralNewsModel] Deleted {result.deleted_count} news entries from database")
+        return result.deleted_count
+
     def create_article(self, summaryDate: str, article: GeneralNewsItem) -> dict:
         """Create a single article entry at root level."""
         payload = {
