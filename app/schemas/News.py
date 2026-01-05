@@ -9,6 +9,7 @@ class News(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=ObjectId, alias="_id")
     title:str
     description:str
+    detailedDescription: Optional[str] = Field(default="", description="A detailed, rephrased version of the news content. Will be generated for new news items.")
     sourceUrl:str
     imageUrl: Optional[str] = None 
     class Config:

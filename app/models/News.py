@@ -24,7 +24,16 @@ class NewsModel:
         Retrieve news for a specific dashboard from the database.
         """
         cursor = self.collection.find({"dashboardId": dashboard_id})
-        return [CreateNewsSchema(**doc) for doc in cursor]
+        news_list = []
+        for doc in cursor:
+            # Ensure detailedDescription exists for backward compatibility
+            if "news" in doc:
+                for news_item in doc["news"]:
+                    if "detailedDescription" not in news_item or not news_item.get("detailedDescription"):
+                        # Use description as fallback for existing items
+                        news_item["detailedDescription"] = news_item.get("description", "")
+            news_list.append(CreateNewsSchema(**doc))
+        return news_list
     
     def update_news(self, dashboard_id: str, data: dict):
         """

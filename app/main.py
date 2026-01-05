@@ -13,6 +13,7 @@ from app.helpers.Database import MongoDB
 from app.helpers.GeneralNews import GeneralNewsHelper
 from app.helpers.News import News as NewsHelper
 from app.helpers.SERP import SERPHelper
+from app.helpers.Scraper import WebsiteScraper
 from app.middleware.Cors import add_cors_middleware
 from app.middleware.GlobalErrorHandling import GlobalErrorHandlingMiddleware
 from app.models.Dashboard import DashboardModel
@@ -121,19 +122,27 @@ def _process_queue_entry(entry: QueueEntry) -> tuple[str, bool, Optional[str]]:
 
     try:
         if entry.type == QueueType.NEWS:
-            NewsHelper().retrieve_news(dashboard_id)
+            result = NewsHelper().retrieve_news(dashboard_id)
         elif entry.type == QueueType.CALENDAR:
-            CalendarHelper().retrieve_calendar(dashboard_id)
+            result = CalendarHelper().retrieve_calendar(dashboard_id)
         elif entry.type == QueueType.COMPLIANCE:
-            CourtDecisions().retrieve_court_decisions(dashboard_id)
+            result = CourtDecisions().retrieve_court_decisions(dashboard_id)
         elif entry.type == QueueType.LAW_CHANGE:
-            DashboardCompliance().retrieve_law_changes(dashboard_id)
+            result = DashboardCompliance().retrieve_law_changes(dashboard_id)
         else:
             raise ValueError(f"Unsupported queue type: {entry.type}")
 
-        queue_model.mark_status(entry_id, QueueStatus.COMPLETED)
-        print(f"[Queue] Completed entry {entry_id}")
-        return (str(entry_id), True, None)
+        # Check the return value - only mark COMPLETED if success is True
+        if result and result.get("success"):
+            queue_model.mark_status(entry_id, QueueStatus.COMPLETED)
+            print(f"[Queue] Completed entry {entry_id}")
+            return (str(entry_id), True, None)
+        else:
+            # Retrieve function returned success=False, mark as FAILED
+            error_msg = result.get("error", "Unknown error") if result else "No result returned"
+            queue_model.mark_status(entry_id, QueueStatus.FAILED, error_msg)
+            print(f"[Queue] Failed entry {entry_id}: {error_msg}")
+            return (str(entry_id), False, error_msg)
     except Exception as exc:  # pylint: disable=broad-except
         queue_model.mark_status(entry_id, QueueStatus.FAILED, str(exc))
         print(f"[Queue] Failed entry {entry_id}: {exc}")

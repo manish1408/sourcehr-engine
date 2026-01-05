@@ -14,6 +14,7 @@ from app.models.CourtDecisions import CourtDecisionsModel
 from app.helpers.SERP import SERPHelper
 from langchain.schema import HumanMessage, SystemMessage
 from app.schemas.Dashboard import CourtDecisionList
+from app.helpers.UrlScraperHelper import UrlScraperHelper
 
     
 class CourtDecisions:
@@ -25,6 +26,7 @@ class CourtDecisions:
         self.locations_model=LocationsModel()      
         self.court_decisions_model = CourtDecisionsModel()
         self.serp_helper = SERPHelper()
+        self.url_scraper_helper = UrlScraperHelper()
         self.azure_client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_KEY"),
             api_version="2024-12-01-preview",
@@ -288,6 +290,31 @@ class CourtDecisions:
                 response_message = response.choices[0].message
                 message_content = response.choices[0].message.content
             court_decisons = self.format_court_decisions(message_content)
+            
+            # Extract URLs from court decisions (from sourceUrl field) and scrape/save to vector DB
+            court_decision_urls = []
+            for court_decision in court_decisons:
+                # Get sourceUrl (handles both Pydantic models and dicts)
+                if isinstance(court_decision, dict):
+                    url = court_decision.get('sourceUrl', '')
+                else:
+                    url = getattr(court_decision, 'sourceUrl', '')
+                
+                if url and url.strip():
+                    court_decision_urls.append(url.strip())
+            
+            if court_decision_urls:
+                try:
+                    scrape_result = self.url_scraper_helper.scrape_and_save_urls(
+                        urls=court_decision_urls,
+                        dashboard_id=dashboard_id,
+                        source="court_decisions"
+                    )
+                    print(f"[CourtDecisions] Scraped {scrape_result.get('scraped_count', 0)} URLs, skipped {scrape_result.get('skipped_count', 0)} URLs")
+                    if scrape_result.get('errors'):
+                        print(f"[CourtDecisions] Errors: {scrape_result.get('errors')}")
+                except Exception as e:
+                    print(f"[CourtDecisions] Error scraping URLs: {e}")
    
             existing_docs = self.court_decisions_model.get_court_decisions(dashboard_id)
             if existing_docs:

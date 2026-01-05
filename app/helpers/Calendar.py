@@ -14,6 +14,7 @@ from app.models.LegalCalender import LegalCalenderModel
 from app.helpers.SERP import SERPHelper
 from langchain.schema import HumanMessage, SystemMessage
 from app.schemas.Dashboard import LegalCalendar
+from app.helpers.UrlScraperHelper import UrlScraperHelper
     
 class Calendar:
     def __init__(self):
@@ -24,6 +25,7 @@ class Calendar:
         self.locations_model=LocationsModel()      
         self.calendar_model = LegalCalenderModel()
         self.serp_helper = SERPHelper()
+        self.url_scraper_helper = UrlScraperHelper()
         self.azure_client = AzureOpenAI(
             api_key=os.getenv("AZURE_OPENAI_KEY"),
             api_version="2024-12-01-preview",
@@ -292,6 +294,21 @@ class Calendar:
             legal_calendar = self.format_legal_calendar(message_content)
             # Prepare events as dicts
             legal_events_dict = [item.model_dump() for item in legal_calendar.events]
+
+            # Extract URLs from calendar events and scrape/save to vector DB
+            calendar_urls = [item.sourceUrl for item in legal_calendar.events if hasattr(item, 'sourceUrl') and item.sourceUrl]
+            if calendar_urls:
+                try:
+                    scrape_result = self.url_scraper_helper.scrape_and_save_urls(
+                        urls=calendar_urls,
+                        dashboard_id=dashboard_id,
+                        source="calendar"
+                    )
+                    print(f"[Calendar] Scraped {scrape_result.get('scraped_count', 0)} URLs, skipped {scrape_result.get('skipped_count', 0)} URLs")
+                    if scrape_result.get('errors'):
+                        print(f"[Calendar] Errors: {scrape_result.get('errors')}")
+                except Exception as e:
+                    print(f"[Calendar] Error scraping URLs: {e}")
 
             # Merge into existing document if present, else create new
             existing_docs = self.calendar_model.get_legal_calender(dashboard_id)

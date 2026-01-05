@@ -166,6 +166,7 @@ class LawChangeListByLocation(BaseModel):
 class NewsSchema(BaseModel):
     title: str = Field(..., description="Title of the news")
     description: str = Field(..., description="Description of the news")
+    detailedDescription: Optional[str] = Field(..., description="A detailed, rephrased, and expanded version of the news content generated from the raw news data. This should be comprehensive, containing approximately 50-100 sentences with extensive in-depth information, background context, implications, legal analysis, industry impact, and future considerations.")
     sourceUrl: str = Field(..., description="The URL to the original source of the news provided in the text.")
     imageUrl: Optional[str] = None
 class NewsList(BaseModel):

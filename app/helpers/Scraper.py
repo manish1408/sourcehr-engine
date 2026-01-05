@@ -12,6 +12,62 @@ class WebsiteScraper:
         self.api_key =os.getenv("SPIDER_API_KEY")
         self.PLAYWRIGHT_WSS=os.getenv("PLAYWRIGHT_WSS")
         
+    # def _scrape_url_with_spider(self, url: str, limit: int = 1):
+    #     if not url.startswith("https://"):
+    #         url = f"https://{url.strip('/')}/"
+
+    #     payload = {
+    #         "url": url,
+    #         "limit": limit,
+    #         "return_format": "html",   # raw often returns empty
+    #         "anti_bot": True,
+    #         "proxy_enabled": True,
+    #         "stealth": True,
+    #         "respect_robots": False,   # IMPORTANT
+    #         "metadata": True,
+    #         "country_code": "us",      # keep stable
+    #         "wait_for": {
+    #             "delay": {
+    #                 "timeout": {"secs": 3, "nanos": 0}
+    #             }
+    #         }
+    #     }
+
+    #     headers = {
+    #         "Authorization": f"Bearer {self.api_key}",
+    #         "Content-Type": "application/json"
+    #     }
+
+    #     try:
+    #         response = requests.post(
+    #             "https://api.spider.cloud/crawl",
+    #             headers=headers,
+    #             json=payload,
+    #             timeout=60
+    #         )
+    #         response.raise_for_status()
+
+    #         data = response.json()
+
+    #         # Debug protection
+    #         if not data:
+    #             return {
+    #                 "success": False,
+    #                 "error": "Spider returned empty result",
+    #                 "payload": payload
+    #             }
+
+    #         return {
+    #             "success": True,
+    #             "data": data
+    #         }
+
+    #     except requests.exceptions.RequestException as e:
+    #         return {
+    #             "success": False,
+    #             "error": str(e)
+    #         }
+
 
     def _scrape_url_with_spider(self, url: str, limit: int = 1):
         if not url.startswith('https://'):
@@ -61,6 +117,52 @@ class WebsiteScraper:
                 "error": str(e)
             }
 
+    # def _scrape_url_with_playwright(self, url: str):
+    #     if not url.startswith("https://"):
+    #         url = f"https://{url.strip('/')}/"
+
+    #     try:
+    #         with sync_playwright() as p:
+    #             browser = p.chromium.connect_over_cdp(
+    #                 self.PLAYWRIGHT_WSS,
+    #                 timeout=30000
+    #             )
+
+    #             # Always create a NEW context
+    #             context = browser.new_context(
+    #                 ignore_https_errors=True
+    #             )
+    #             page = context.new_page()
+
+    #             # Block heavy resources
+    #             page.route(
+    #                 "**/*",
+    #                 lambda route, request: (
+    #                     route.abort()
+    #                     if request.resource_type in ("image", "media", "font")
+    #                     else route.continue_()
+    #                 ),
+    #             )
+
+    #             page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    #             page.wait_for_selector("body", timeout=20000)
+
+    #             html_content = page.content()
+
+    #             # IMPORTANT: close context, not browser
+    #             context.close()
+
+    #             return {
+    #                 "success": True,
+    #                 "url": url,
+    #                 "html": html_content
+    #             }
+
+    #     except Exception as e:
+    #         return {
+    #             "success": False,
+    #             "error": str(e)
+    #         }
 
 
     def _scrape_url_with_playwright(self, url: str):
