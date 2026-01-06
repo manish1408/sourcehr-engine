@@ -153,6 +153,7 @@ class  News:
         
     def retrieve_news(self, dashboard_id: str):
         """Main method to extract news items related to dashboard filters."""
+        print(f"Processing news for dashboard: {dashboard_id}")
         try:
             dashboard_choices = self.get_dashboard_choices(dashboard_id)
             location_str = ", ".join(dashboard_choices.get("location_names", [])) or "all locations"

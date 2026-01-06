@@ -4,6 +4,7 @@ from typing import Iterable, Optional
 import pytz
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
@@ -224,17 +225,6 @@ def startup_event():
     #     replace_existing=True,
     # )
     
-    # One-time job: Run today at 2:35 PM IST (Asia/Kolkata)
-    scheduler.add_job(
-        run_news_job,
-        trigger="cron",
-        hour=14,
-        minute=35,
-        timezone=pytz.timezone('Asia/Kolkata'),
-        id="news_job_onetime",
-        replace_existing=True,
-    )
-    print("One-time news job scheduled for today at 2:35 PM IST (Asia/Kolkata)")
     scheduler.add_job(
         run_compliance_job,
         trigger="interval",
@@ -273,9 +263,21 @@ def startup_event():
         replace_existing=True,
     )
     
+    # Add specific operators scrape and map job to run on Tuesday at 3 PM
+    scheduler.add_job(
+        run_news_job,
+        trigger=CronTrigger(
+            day_of_week='tue', 
+            hour=15, 
+            minute=0,
+            timezone="Asia/Kolkata"),
+        misfire_grace_time=300  # Allow the job to be late by up to 5 minutes
+    )
+    
     print("General news job scheduled to run every 24 hours")
     print("Queue job scheduled to run every minute")
     print("Law changes job scheduled to run every Sunday at midnight")
+    print("Specific operators scrape and map job scheduled to run every Tuesday at 3 PM IST")
 
     scheduler.start()
 
