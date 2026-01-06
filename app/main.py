@@ -1,6 +1,7 @@
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Iterable, Optional
+import pytz
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
@@ -214,13 +215,26 @@ def startup_event():
     doc_result = document_service.schedule_processor()
     print(f"Document processor: {doc_result.get('data', 'scheduled')}")
 
+    # Regular news job - commented out for one-time run
+    # scheduler.add_job(
+    #     run_news_job,
+    #     trigger="interval",
+    #     hours=23.5,
+    #     id="news_job",
+    #     replace_existing=True,
+    # )
+    
+    # One-time job: Run today at 2:35 PM IST (Asia/Kolkata)
     scheduler.add_job(
         run_news_job,
-        trigger="interval",
-        hours=23.5,
-        id="news_job",
+        trigger="cron",
+        hour=14,
+        minute=35,
+        timezone=pytz.timezone('Asia/Kolkata'),
+        id="news_job_onetime",
         replace_existing=True,
     )
+    print("One-time news job scheduled for today at 2:35 PM IST (Asia/Kolkata)")
     scheduler.add_job(
         run_compliance_job,
         trigger="interval",
