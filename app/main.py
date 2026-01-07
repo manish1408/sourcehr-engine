@@ -267,7 +267,7 @@ def startup_event():
     scheduler.add_job(
         run_news_job,
         trigger=CronTrigger(
-            day_of_week='tue', 
+            day_of_week='wed', 
             hour=15, 
             minute=0,
             timezone="Asia/Kolkata"),

@@ -13,9 +13,19 @@ class NewsModel:
         """
         Create a new news document in the database.
         """
+        from bson import ObjectId
+        
         data["created_at"] = datetime.utcnow()
         news = CreateNewsSchema(**data)
-        result = self.collection.insert_one(news.model_dump(by_alias=True))
+        news_dict = news.model_dump(by_alias=True, mode='python')
+        
+        # Ensure all news items have _id ObjectIds
+        if "news" in news_dict and isinstance(news_dict["news"], list):
+            for news_item in news_dict["news"]:
+                if "_id" not in news_item or news_item.get("_id") is None:
+                    news_item["_id"] = ObjectId()
+        
+        result = self.collection.insert_one(news_dict)
         return result.inserted_id
     
     
@@ -38,7 +48,26 @@ class NewsModel:
     def update_news(self, dashboard_id: str, data: dict):
         """
         Update a news document in the database.
+        Validates data and ensures all news items have proper ObjectIds.
         """
-        result = self.collection.update_one({"dashboardId": dashboard_id}, {"$set": data})
+        from bson import ObjectId
+        
+        # Validate the data using the schema
+        try:
+            validated_data = CreateNewsSchema(**data)
+        except Exception as e:
+            print(f"Error validating news data: {e}")
+            raise
+        
+        # Get the validated dict with python mode to preserve ObjectId types
+        validated_dict = validated_data.model_dump(by_alias=True, mode='python')
+        
+        # Ensure all news items have _id ObjectIds
+        if "news" in validated_dict and isinstance(validated_dict["news"], list):
+            for news_item in validated_dict["news"]:
+                if "_id" not in news_item or news_item.get("_id") is None:
+                    news_item["_id"] = ObjectId()
+        
+        result = self.collection.update_one({"dashboardId": dashboard_id}, {"$set": validated_dict})
         return result.modified_count
 
