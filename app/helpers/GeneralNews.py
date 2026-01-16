@@ -83,9 +83,15 @@ class GeneralNewsHelper:
         # Delete all previous entries from database before inserting new ones
         self.model.delete_all()
 
+        # Filter articles to only include those with logoUrl
+        articles_with_logos_only = [
+            article for article in articles_with_logos 
+            if article.logoUrl is not None
+        ]
+
         # Save each article at root level instead of as an array
         saved_articles = []
-        for article in articles_with_logos:
+        for article in articles_with_logos_only:
             article_doc = self.model.create_article(
                 summaryDate=target_date.isoformat(),
                 article=article

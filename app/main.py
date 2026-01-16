@@ -217,13 +217,13 @@ def startup_event():
     print(f"Document processor: {doc_result.get('data', 'scheduled')}")
 
     # Regular news job - commented out for one-time run
-    # scheduler.add_job(
-    #     run_news_job,
-    #     trigger="interval",
-    #     hours=23.5,
-    #     id="news_job",
-    #     replace_existing=True,
-    # )
+    scheduler.add_job(
+        run_news_job,
+        trigger="interval",
+        hours=23.5,
+        id="news_job",
+        replace_existing=True,
+    )
     
     scheduler.add_job(
         run_compliance_job,
@@ -264,15 +264,15 @@ def startup_event():
     )
     
     # Add specific operators scrape and map job to run on Tuesday at 3 PM
-    scheduler.add_job(
-        run_news_job,
-        trigger=CronTrigger(
-            day_of_week='wed', 
-            hour=15, 
-            minute=0,
-            timezone="Asia/Kolkata"),
-        misfire_grace_time=300  # Allow the job to be late by up to 5 minutes
-    )
+    # scheduler.add_job(
+    #     run_news_job,
+    #     trigger=CronTrigger(
+    #         day_of_week='wed', 
+    #         hour=15, 
+    #         minute=0,
+    #         timezone="Asia/Kolkata"),
+    #     misfire_grace_time=300  # Allow the job to be late by up to 5 minutes
+    # )
     
     print("General news job scheduled to run every 24 hours")
     print("Queue job scheduled to run every minute")
