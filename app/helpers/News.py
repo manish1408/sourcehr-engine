@@ -272,8 +272,19 @@ class  News:
             raw_data = message_content
             news = self.format_news(raw_data)
 
+            # Filter to only include news items with sourceUrl
+            news_with_url = []
+            for item in news.news:
+                if hasattr(item, 'sourceUrl') and item.sourceUrl and item.sourceUrl.strip():
+                    news_with_url.append(item)
+
+            if not news_with_url:
+                print("[News] No news items with sourceUrl found, skipping save")
+                existing_news_docs = self.news_model.get_news(dashboard_id)
+                return {"success": True, "data": existing_news_docs if existing_news_docs else []}
+
             # Extract URLs from news items and scrape/save to vector DB
-            news_urls = [item.sourceUrl for item in news.news if hasattr(item, 'sourceUrl') and item.sourceUrl]
+            news_urls = [item.sourceUrl for item in news_with_url if hasattr(item, 'sourceUrl') and item.sourceUrl]
             if news_urls:
                 try:
                     scrape_result = self.url_scraper_helper.scrape_and_save_urls(
@@ -296,7 +307,7 @@ class  News:
                 # 2a. Deduplicate using (title, sourceUrl)
                 existing_keys = {(getattr(n, 'title', None), getattr(n, 'sourceUrl', None)) for n in existing_news_list}
                 new_news_items = []
-                for item in news.news:
+                for item in news_with_url:
                     if not hasattr(item, 'id') or getattr(item, 'id', None) is None:
                         try:
                             item.id = ObjectId()
@@ -325,7 +336,7 @@ class  News:
 
             else:
                 # 3. No news exists, create new document
-                for item in news.news:
+                for item in news_with_url:
                     if not hasattr(item, 'id') or getattr(item, 'id', None) is None:
                         try:
                             item.id = ObjectId()
@@ -337,7 +348,7 @@ class  News:
 
                 news_payload = {
                     "dashboardId": dashboard_id,
-                    "news": [item.model_dump(by_alias=True, mode='python') for item in news.news],
+                    "news": [item.model_dump(by_alias=True, mode='python') for item in news_with_url],
                     "createdAt": datetime.utcnow(),
                     "updatedAt": datetime.utcnow()
                 }

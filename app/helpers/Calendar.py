@@ -292,11 +292,21 @@ class Calendar:
                 message_content = response.choices[0].message.content
                 
             legal_calendar = self.format_legal_calendar(message_content)
-            # Prepare events as dicts
-            legal_events_dict = [item.model_dump() for item in legal_calendar.events]
+            # Prepare events as dicts and filter to only include entries with sourceUrl
+            legal_events_dict = []
+            for item in legal_calendar.events:
+                event_dict = item.model_dump()
+                # Only include events with a valid sourceUrl
+                if event_dict.get('sourceUrl') and event_dict.get('sourceUrl').strip():
+                    legal_events_dict.append(event_dict)
+
+            if not legal_events_dict:
+                print("[Calendar] No legal calendar events with sourceUrl found, skipping save")
+                existing_docs = self.calendar_model.get_legal_calender(dashboard_id)
+                return {"success": True, "data": existing_docs if existing_docs else []}
 
             # Extract URLs from calendar events and scrape/save to vector DB
-            calendar_urls = [item.sourceUrl for item in legal_calendar.events if hasattr(item, 'sourceUrl') and item.sourceUrl]
+            calendar_urls = [item.get('sourceUrl') for item in legal_events_dict if item.get('sourceUrl')]
             if calendar_urls:
                 try:
                     scrape_result = self.url_scraper_helper.scrape_and_save_urls(

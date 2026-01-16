@@ -291,15 +291,27 @@ class CourtDecisions:
                 message_content = response.choices[0].message.content
             court_decisons = self.format_court_decisions(message_content)
             
-            # Extract URLs from court decisions (from sourceUrl field) and scrape/save to vector DB
-            court_decision_urls = []
+            # Filter to only include entries with sourceUrl
+            court_decisons_with_url = []
             for court_decision in court_decisons:
-                # Get sourceUrl (handles both Pydantic models and dicts)
                 if isinstance(court_decision, dict):
                     url = court_decision.get('sourceUrl', '')
                 else:
                     url = getattr(court_decision, 'sourceUrl', '')
-                
+                if url and url.strip():
+                    court_decisons_with_url.append(court_decision)
+            if not court_decisons_with_url:
+                print("[CourtDecisions] No court decisions with sourceUrl found, skipping save")
+                existing_docs = self.court_decisions_model.get_court_decisions(dashboard_id)
+                return {"success": True, "data": existing_docs if existing_docs else []}
+            
+            # Extract URLs from court decisions (from sourceUrl field) and scrape/save to vector DB
+            court_decision_urls = []
+            for court_decision in court_decisons_with_url:
+                if isinstance(court_decision, dict):
+                    url = court_decision.get('sourceUrl', '')
+                else:
+                    url = getattr(court_decision, 'sourceUrl', '')
                 if url and url.strip():
                     court_decision_urls.append(url.strip())
             
@@ -322,7 +334,7 @@ class CourtDecisions:
                 existing_list = doc.courtDecisions if hasattr(doc, 'courtDecisions') else []
                 existing_keys = {(getattr(n, 'title', None), getattr(n, 'sourceUrl', None)) for n in existing_list}
                 new_items = []
-                for item in court_decisons:
+                for item in court_decisons_with_url:
                     key = (item.get('title'), item.get('sourceUrl'))
                     if key not in existing_keys:
                         new_items.append(item)
@@ -333,7 +345,7 @@ class CourtDecisions:
             else:
                 payload = {
                     "dashboardId": dashboard_id,
-                    "courtDecisions": court_decisons,
+                    "courtDecisions": court_decisons_with_url,
                     "createdAt": datetime.utcnow(),
                     "updatedAt": datetime.utcnow()
                 }
